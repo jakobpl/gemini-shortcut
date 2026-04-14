@@ -1,0 +1,80 @@
+{
+  "source": "/Users/j/Desktop/x64/work/gemini-shortcut/gemini-shortcut/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Gemini Shortcut",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 33
+        }
+      },
+      {
+        "comment": "",
+        "key": "AIza...",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 38
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 43
+        }
+      },
+      {
+        "comment": "",
+        "key": "Enable tool calling",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 63
+        }
+      },
+      {
+        "comment": "",
+        "key": "Allow terminal commands",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 64
+        }
+      },
+      {
+        "comment": "",
+        "key": "Coming Soon",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "OK",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 84
+        }
+      },
+      {
+        "comment": "",
+        "key": "Google Sign-In will be available in a future update.",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 86
+        }
+      }
+    ]
+  },
+  "version": 1
+}
