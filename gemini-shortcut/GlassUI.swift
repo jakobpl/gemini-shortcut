@@ -1,67 +1,31 @@
 import SwiftUI
 
-// MARK: - Visual Effect
+// MARK: - Visual Effect View
 
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
-    
+
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        view.wantsLayer = true
-        view.layer?.cornerRadius = 20
-        view.layer?.masksToBounds = true
-        return view
+        let v = NSVisualEffectView()
+        v.material = material
+        v.blendingMode = blendingMode
+        v.state = .active
+        return v
     }
-    
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - Liquid Glass Container
+// Uses macOS 26 native .glassEffect() for real chromatic, refractive glass.
+// Place this as a background layer behind content inside a ZStack.
 
 struct LiquidGlassContainer: View {
-    let cornerRadius: CGFloat
-    
-    var body: some View {
-        ZStack {
-            VisualEffectView(material: .popover, blendingMode: .behindWindow)
-                .opacity(0.55)
-            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                .opacity(0.35)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    }
-}
+    var cornerRadius: CGFloat = 28
 
-// MARK: - Liquid Glow Overlay
-
-struct LiquidGlowOverlay: View {
-    let cornerRadius: CGFloat
-    @State private var rotation: Double = 0
-    
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(
-                AngularGradient(
-                    gradient: Gradient(colors: [
-                        Color.white.opacity(0.0),
-                        Color.white.opacity(0.22),
-                        Color.white.opacity(0.0),
-                        Color.white.opacity(0.0)
-                    ]),
-                    center: .center,
-                    angle: .degrees(rotation)
-                ),
-                lineWidth: 1.5
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
+            .glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -69,31 +33,38 @@ struct LiquidGlowOverlay: View {
 
 struct LiquidOrb: View {
     @State private var isPulsing = false
-    
+
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.accentColor.opacity(0.12))
-                .frame(width: 44, height: 44)
-                .scaleEffect(isPulsing ? 1.4 : 1.0)
-                .blur(radius: 10)
-            
+                .fill(Color.accentColor.opacity(0.1))
+                .frame(width: 50, height: 50)
+                .scaleEffect(isPulsing ? 1.35 : 1.0)
+                .blur(radius: 12)
+
             Circle()
                 .fill(Color.accentColor.opacity(0.22))
-                .frame(width: 30, height: 30)
-                .scaleEffect(isPulsing ? 1.25 : 1.0)
+                .frame(width: 32, height: 32)
+                .scaleEffect(isPulsing ? 1.2 : 1.0)
                 .blur(radius: 5)
-            
+
             Circle()
-                .fill(Color.accentColor.opacity(0.55))
-                .frame(width: 16, height: 16)
-            
+                .fill(RadialGradient(
+                    colors: [Color.white.opacity(0.95), Color.accentColor.opacity(0.7)],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 12
+                ))
+                .frame(width: 18, height: 18)
+                .overlay(Circle().stroke(Color.white.opacity(0.55), lineWidth: 0.75))
+                .shadow(color: Color.accentColor.opacity(0.5), radius: isPulsing ? 8 : 4, x: 0, y: 0)
+
             Image(systemName: "sparkles")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(Color.white)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
                 isPulsing = true
             }
         }
@@ -101,19 +72,20 @@ struct LiquidOrb: View {
 }
 
 // MARK: - Reveal Blur Text Field
+// Placeholder-as-label: blurs content when not focused/hovered so key is hidden at a glance.
 
 struct RevealBlurTextField: View {
     let placeholder: String
     @Binding var text: String
     @FocusState private var isFocused: Bool
     @State private var isHovered = false
-    
+
     var body: some View {
         ZStack(alignment: .leading) {
             if text.isEmpty {
                 Text(placeholder)
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.white.opacity(0.50))
                     .allowsHitTesting(false)
             }
             TextField("", text: $text)
@@ -121,21 +93,21 @@ struct RevealBlurTextField: View {
                 .foregroundStyle(Color.white)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
-                .blur(radius: (isFocused || isHovered) ? 0 : 5)
+                .blur(radius: (isFocused || isHovered || text.isEmpty) ? 0 : 6)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(isFocused ? 0.45 : 0), lineWidth: 1.5)
         )
-        .onHover { hovering in
-            isHovered = hovering
-        }
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -144,147 +116,163 @@ struct RevealBlurTextField: View {
 struct GlassTextField: View {
     let placeholder: String
     @Binding var text: String
-    var isSecure: Bool = false
-    
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         ZStack(alignment: .leading) {
             if text.isEmpty {
                 Text(placeholder)
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.white.opacity(0.38))
+                    .allowsHitTesting(false)
             }
-            if isSecure {
-                SecureField("", text: $text)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.white)
-            } else {
-                TextField("", text: $text)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.white)
-            }
+            TextField("", text: $text)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.white)
+                .textFieldStyle(.plain)
+                .focused($isFocused)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(isFocused ? 0.45 : 0), lineWidth: 1.5)
         )
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 }
 
 // MARK: - Glass Text Editor
 
 struct GlassTextEditor: View {
-    let placeholder: String
+    var placeholder: String = ""
     @Binding var text: String
-    let height: CGFloat
-    
+    var height: CGFloat = 80
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.45))
-                    .padding(8)
+                    .foregroundStyle(Color.white.opacity(0.50))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
                     .allowsHitTesting(false)
             }
             TextEditor(text: $text)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.white)
                 .scrollContentBackground(.hidden)
-                .padding(8)
+                .focused($isFocused)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
                 .frame(height: height)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(isFocused ? 0.45 : 0), lineWidth: 1.5)
         )
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 }
 
-// MARK: - Glass Pill Button
+// MARK: - Glass Pill Button (model selector)
 
 struct GlassPillButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(.subheadline, design: .rounded, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.7))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .font(.system(.caption, design: .rounded, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(Color.white.opacity(isSelected ? 1.0 : 0.65))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(isSelected ? Color.white.opacity(0.2) : Color.clear)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .opacity(isHovered && !isSelected ? 0.85 : 1.0)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.white.opacity(isSelected ? 0.3 : 0.15), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(isSelected ? 0.5 : 0.15), lineWidth: 1.0)
                 )
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.12), value: isSelected)
+        .onHover { isHovered = $0 }
     }
 }
 
-// MARK: - Liquid Glass Toggle
+// MARK: - Glass Toggle
 
 struct GlassToggle: View {
     let title: String
     @Binding var isOn: Bool
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Text(title)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.white.opacity(0.9))
             Spacer()
-            Button(action: { isOn.toggle() }) {
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(isOn ? Color.accentColor.opacity(0.25) : Color.white.opacity(0.12))
-                        .frame(width: 50, height: 28)
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.white.opacity(isOn ? 0.35 : 0.22), lineWidth: 1)
-                        )
-                    
-                    Circle()
-                        .fill(Color.white.opacity(0.35))
-                        .frame(width: isOn ? 32 : 22, height: isOn ? 32 : 22)
-                        .blur(radius: 5)
-                        .offset(x: isOn ? 20 : 3)
-                        .opacity(isOn ? 1 : 0.6)
-                    
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                gradient: Gradient(colors: [Color.white, Color.white.opacity(0.75)]),
-                                center: .topLeading,
-                                startRadius: 0,
-                                endRadius: 14
-                            )
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.9), lineWidth: 0.5)
-                        )
-                        .frame(width: 22, height: 22)
-                        .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
-                        .offset(x: isOn ? 25 : 3)
+            Button(action: {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.68)) {
+                    isOn.toggle()
                 }
-                .frame(width: 50, height: 28)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isOn)
+            }) {
+                ZStack(alignment: .leading) {
+                    // Track — glass base with accent tint overlay when on
+                    ZStack {
+                        Capsule()
+                            .glassEffect(in: Capsule())
+                            .frame(width: 48, height: 26)
+                        if isOn {
+                            Capsule()
+                                .fill(Color.accentColor.opacity(0.28))
+                                .frame(width: 48, height: 26)
+                        }
+                    }
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(isOn ? 0.45 : 0.20), lineWidth: 1)
+                    )
+
+                    // Glow halo behind thumb
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: isOn ? 28 : 20, height: isOn ? 28 : 20)
+                        .blur(radius: 5)
+                        .offset(x: isOn ? 21 : 3)
+
+                    // Glass bead thumb
+                    Circle()
+                        .fill(RadialGradient(
+                            colors: [Color.white, Color.white.opacity(0.72)],
+                            center: .topLeading,
+                            startRadius: 0,
+                            endRadius: 13
+                        ))
+                        .frame(width: 21, height: 21)
+                        .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 0.6))
+                        .shadow(color: Color.black.opacity(0.22), radius: 2, x: 0, y: 1)
+                        .shadow(color: Color.accentColor.opacity(isOn ? 0.35 : 0), radius: 5, x: 0, y: 0)
+                        .offset(x: isOn ? 24 : 3)
+                }
+                .frame(width: 48, height: 26)
             }
             .buttonStyle(.plain)
         }
@@ -297,24 +285,25 @@ struct GlassButton: View {
     let title: String
     let action: () -> Void
     var isDisabled: Bool = false
-    
+
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(.body, design: .rounded, weight: .semibold))
-                .foregroundStyle(isDisabled ? Color.white.opacity(0.35) : Color.white)
+                .foregroundStyle(isDisabled ? Color.white.opacity(0.3) : Color.white.opacity(isHovered ? 1.0 : 0.9))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(isDisabled ? Color.white.opacity(0.06) : Color.white.opacity(0.15))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(isDisabled ? 0.08 : 0.22), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .opacity(isDisabled ? 0.5 : (isHovered ? 1.0 : 0.85))
                 )
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
     }
 }
