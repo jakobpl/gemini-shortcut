@@ -179,24 +179,34 @@ struct GlassTextField: View {
 // MARK: - Glass Text Editor
 
 struct GlassTextEditor: View {
+    let placeholder: String
     @Binding var text: String
     let height: CGFloat
     
     var body: some View {
-        TextEditor(text: $text)
-            .font(.system(.body, design: .rounded))
-            .foregroundStyle(Color.white)
-            .scrollContentBackground(.hidden)
-            .padding(8)
-            .frame(height: height)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-            )
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.45))
+                    .padding(8)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $text)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.white)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .frame(height: height)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 
@@ -273,6 +283,7 @@ struct GlassToggle: View {
                         .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
                         .offset(x: isOn ? 25 : 3)
                 }
+                .frame(width: 50, height: 28)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isOn)
             }
             .buttonStyle(.plain)
@@ -305,29 +316,5 @@ struct GlassButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
-    }
-}
-
-// MARK: - Glass Icon Button
-
-struct GlassIconButton: View {
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "g.circle.fill")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(Color.white)
-                .frame(width: 48, height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.1))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
     }
 }
