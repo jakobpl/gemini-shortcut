@@ -10,6 +10,13 @@ struct gemini_shortcutApp: App {
     }
 }
 
+// NSPanel by default returns canBecomeKey = false, which prevents text fields
+// inside the panel from ever receiving first responder. This subclass fixes that.
+class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var panel: NSPanel?
     var settingsPanel: NSPanel?
@@ -47,7 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func setupPanel() {
         let contentRect = NSRect(x: 0, y: 0, width: 580, height: 70)
-        let panel = NSPanel(
+        let panel = KeyablePanel(
             contentRect: contentRect,
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
@@ -80,8 +87,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Settings Panel
 
     func setupSettingsPanel() {
-        let contentRect = NSRect(x: 0, y: 0, width: 360, height: 380)
-        let panel = NSPanel(
+        let contentRect = NSRect(x: 0, y: 0, width: 360, height: 330)
+        let panel = KeyablePanel(
             contentRect: contentRect,
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
@@ -134,7 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let button = statusItem?.button, let screen = NSScreen.main {
             let buttonFrame = button.window?.convertToScreen(button.frame) ?? button.frame
             let panelWidth: CGFloat = 360
-            let panelHeight: CGFloat = 380
+            let panelHeight: CGFloat = 330
             let x = buttonFrame.midX - panelWidth / 2
             let y = screen.visibleFrame.maxY - buttonFrame.height - panelHeight + 8
 
@@ -178,7 +185,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         hideSettingsPanel()
 
-        if let screen = NSScreen.main {
+        // Use the screen the panel already lives on (respects user dragging it to another monitor).
+        // Fall back to the screen with the mouse cursor so the first open feels natural.
+        if let screen = panel.screen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main {
             let sf = screen.visibleFrame
             let finalRect = NSRect(
                 x: sf.midX - panel.frame.width / 2,
@@ -241,8 +250,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } completionHandler: {
             panel.orderOut(nil)
             panel.alphaValue = 1
-            // Reset to compact height for next open
-            if let screen = NSScreen.main {
+            // Reset to compact height for next open, staying on the same screen
+            if let screen = panel.screen ?? NSScreen.main {
                 let compactRect = NSRect(
                     x: screen.visibleFrame.midX - panel.frame.width / 2,
                     y: screen.visibleFrame.minY + 100,
@@ -294,7 +303,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func handleResizeNotification(_ notification: Notification) {
         guard let height = notification.object as? CGFloat,
               let panel = panel,
-              let screen = NSScreen.main else { return }
+              let screen = panel.screen ?? NSScreen.main else { return }
 
         let currentFrame = panel.frame
         let newFrame = NSRect(

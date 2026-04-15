@@ -8,11 +8,21 @@
 import AppKit
 import ScreenCaptureKit
 
+extension NSScreen {
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+}
+
 enum ScreenshotService {
-    static func captureScreen() async -> NSImage? {
+    /// Captures the display that hosts `screen`. Falls back to the first available display.
+    static func captureScreen(for screen: NSScreen? = nil) async -> NSImage? {
         do {
             let content = try await SCShareableContent.current
-            guard let display = content.displays.first else { return nil }
+            let targetID = screen?.displayID
+            let display = content.displays.first { targetID != nil && $0.displayID == targetID }
+                       ?? content.displays.first
+            guard let display else { return nil }
             let filter = SCContentFilter(display: display, excludingWindows: [])
             let config = SCStreamConfiguration()
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)

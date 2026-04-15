@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		099CA1EC2F8EBE610032855B /* gemini-shortcut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "gemini-shortcut.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +33,7 @@
 		099CA1E32F8EBE610032855B = {
 			isa = PBXGroup;
 			children = (
+				099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */,
 				099CA1EE2F8EBE610032855B /* gemini-shortcut */,
 				099CA1ED2F8EBE610032855B /* Products */,
 			);
@@ -262,6 +264,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used for voice input to Gemini.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Used to transcribe your voice to text.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -296,6 +300,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used for voice input to Gemini.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Used to transcribe your voice to text.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -16,6 +16,7 @@ class SettingsManager {
     private let instructionsKey = "gemini-custom-instructions"
     private let toolCallingKey = "gemini-tool-calling"
     private let terminalKey = "gemini-terminal-commands"
+    private let workingDirKey = "gemini-working-directory"
     
     private init() {}
     
@@ -61,6 +62,11 @@ class SettingsManager {
     var runTerminalCommandsEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: terminalKey) }
         set { UserDefaults.standard.set(newValue, forKey: terminalKey) }
+    }
+
+    var workingDirectory: String {
+        get { UserDefaults.standard.string(forKey: workingDirKey) ?? (NSHomeDirectory() + "/Desktop") }
+        set { UserDefaults.standard.set(newValue, forKey: workingDirKey) }
     }
 }
 
