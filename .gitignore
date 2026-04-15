@@ -1,0 +1,40 @@
+# Xcode build artifacts
+build/
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# Xcode cache
+.DS_Store
+*.swiftmodule/
+*.abi.json
+*.swiftdoc
+*.pcm
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
