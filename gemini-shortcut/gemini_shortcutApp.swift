@@ -30,6 +30,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var escapeMonitor: Any?
     private var clickMonitor: Any?
 
+    private let panelOriginKey = "gemini-panel-origin"
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupPanel()
         setupSettingsPanel()
@@ -76,9 +78,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if let screen = NSScreen.main {
             let sf = screen.visibleFrame
-            let x = sf.midX - contentRect.width / 2
-            let y = sf.minY + 100
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            let savedOrigin = getSavedPanelOrigin()
+            let x: CGFloat
+            let y: CGFloat
+
+            if let saved = savedOrigin {
+                x = saved.x
+                y = saved.y
+            } else {
+                x = sf.midX - contentRect.width / 2
+                y = sf.minY + 100
+            }
+
+            let clampedX = max(sf.minX, min(x, sf.maxX - contentRect.width))
+            let clampedY = max(sf.minY, min(y, sf.maxY))
+            panel.setFrameOrigin(NSPoint(x: clampedX, y: clampedY))
         }
 
         self.panel = panel
@@ -189,9 +203,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Fall back to the screen with the mouse cursor so the first open feels natural.
         if let screen = panel.screen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main {
             let sf = screen.visibleFrame
+            let savedOrigin = getSavedPanelOrigin()
+            let originX: CGFloat
+            let originY: CGFloat
+
+            if let saved = savedOrigin {
+                originX = max(sf.minX, min(saved.x, sf.maxX - panel.frame.width))
+                originY = max(sf.minY, min(saved.y, sf.maxY))
+            } else {
+                originX = sf.midX - panel.frame.width / 2
+                originY = sf.minY + 100
+            }
+
             let finalRect = NSRect(
-                x: sf.midX - panel.frame.width / 2,
-                y: sf.minY + 100,
+                x: originX,
+                y: originY,
                 width: panel.frame.width,
                 height: panel.frame.height
             )
@@ -234,6 +260,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             clickMonitor = nil
         }
 
+        // Save panel origin before hiding
+        savePanelOrigin(panel.frame.origin)
+
         // Drop 14px and fade out — liquid retraction feel
         let targetRect = NSRect(
             x: panel.frame.origin.x,
@@ -250,11 +279,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } completionHandler: {
             panel.orderOut(nil)
             panel.alphaValue = 1
-            // Reset to compact height for next open, staying on the same screen
+            // Reset to compact height for next open
             if let screen = panel.screen ?? NSScreen.main {
+                let origin = self.getSavedPanelOrigin() ?? NSPoint(x: screen.visibleFrame.midX - panel.frame.width / 2,
+                                                                   y: screen.visibleFrame.minY + 100)
                 let compactRect = NSRect(
-                    x: screen.visibleFrame.midX - panel.frame.width / 2,
-                    y: screen.visibleFrame.minY + 100,
+                    x: origin.x,
+                    y: origin.y,
                     width: panel.frame.width,
                     height: 70
                 )
@@ -306,9 +337,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
               let screen = panel.screen ?? NSScreen.main else { return }
 
         let currentFrame = panel.frame
+        let currentOrigin = currentFrame.origin
+        let heightDelta = height - currentFrame.height
+        let newY = currentOrigin.y - heightDelta
+
         let newFrame = NSRect(
-            x: screen.visibleFrame.midX - currentFrame.width / 2,
-            y: screen.visibleFrame.minY + 100,
+            x: currentOrigin.x,
+            y: newY,
             width: currentFrame.width,
             height: height
         )
@@ -329,5 +364,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if window === panel { hidePanel() }
             else if window === settingsPanel { hideSettingsPanel() }
         }
+    }
+
+    // MARK: - Panel Position Persistence
+
+    private func savePanelOrigin(_ origin: NSPoint) {
+        UserDefaults.standard.set([origin.x, origin.y], forKey: panelOriginKey)
+    }
+
+    private func getSavedPanelOrigin() -> NSPoint? {
+        guard let saved = UserDefaults.standard.array(forKey: panelOriginKey) as? [CGFloat],
+              saved.count == 2 else { return nil }
+        return NSPoint(x: saved[0], y: saved[1])
     }
 }

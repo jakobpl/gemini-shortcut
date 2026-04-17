@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - Scroll Position Tracking
+
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - ContentView
 
 struct ContentView: View {
@@ -9,6 +18,8 @@ struct ContentView: View {
     @State private var contentAppeared = false
     @State private var inputAppeared = false
     @State private var showingAttachmentPreview = false
+    @State private var inputBarVisible = true
+    @State private var lastScrollOffset: CGFloat = 0
 
     @AppStorage("gemini-selected-model") private var selectedModel: String = "gemini-3.1-pro-preview"
 
@@ -42,7 +53,8 @@ struct ContentView: View {
     private var actionButtons: some View {
         VStack {
             HStack {
-                // Clear chat — top-left, only when messages exist
+                Spacer()
+                // Clear chat — top-right, only when messages exist
                 if !viewModel.messages.isEmpty {
                     Button(action: {
                         viewModel.clearMessages()
@@ -55,9 +67,8 @@ struct ContentView: View {
                             .glassEffect(.regular.interactive(), in: .circle)
                     }
                     .buttonStyle(.plain)
-                    .padding(12)
+                    .padding(8)
                 }
-
             }
             Spacer()
         }
@@ -96,8 +107,9 @@ struct ContentView: View {
             }
 
             inputBarContainer
-                .offset(y: inputAppeared ? 0 : 14)
-                .opacity(inputAppeared ? 1 : 0)
+                .offset(y: (inputAppeared && inputBarVisible) ? 0 : 100)
+                .opacity((inputAppeared && inputBarVisible) ? 1 : 0)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: inputBarVisible)
         }
         .frame(minWidth: 580, maxWidth: 580, minHeight: 60, maxHeight: .infinity)
         .onAppear {
@@ -118,6 +130,7 @@ struct ContentView: View {
         .onChange(of: viewModel.messages.count) { _, _ in updateHeight() }
         .onChange(of: viewModel.isLoading) { _, _ in updateHeight() }
         .onChange(of: viewModel.attachedImage) { _, _ in updateHeight() }
+        .onChange(of: viewModel.messages) { _, _ in viewModel.saveMessages() }
     }
 
     // MARK: - Message List
@@ -139,12 +152,13 @@ struct ContentView: View {
                     }
 
                     if showThinkingIndicator {
-                        HStack {
-                            LiquidOrb()
+                        HStack(spacing: 8) {
+                            TypingDotsView()
+                                .frame(height: 6)
                             Spacer()
                         }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                         .transition(.scale(scale: 0.85, anchor: .leading).combined(with: .opacity))
                     }
                 }
@@ -152,13 +166,38 @@ struct ContentView: View {
                 .padding(.vertical, 14)
                 .animation(.spring(response: 0.38, dampingFraction: 0.8), value: viewModel.messages.count)
                 .animation(.spring(response: 0.35, dampingFraction: 0.78), value: showThinkingIndicator)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("scrollview")).minY
+                        )
+                    }
+                )
+            }
+            .coordinateSpace(name: "scrollview")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                if viewModel.messages.isEmpty {
+                    inputBarVisible = true
+                } else {
+                    if offset < lastScrollOffset {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            inputBarVisible = false
+                        }
+                    } else if offset > lastScrollOffset {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            inputBarVisible = true
+                        }
+                    }
+                }
+                lastScrollOffset = offset
             }
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let last = viewModel.messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    inputBarVisible = true
                 }
             }
-            // Also scroll when streaming updates the last message text
             .onChange(of: viewModel.messages.last?.text) { _, _ in
                 if let last = viewModel.messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
@@ -173,50 +212,129 @@ struct ContentView: View {
 
     // MARK: - Message Bubble
 
+    @State private var hoveredMessageId: UUID?
+
     private func messageBubble(for message: ChatMessage) -> some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if message.role == .user { Spacer(minLength: 60) }
+        VStack(alignment: message.role == .model ? .leading : .trailing, spacing: 6) {
+            HStack(alignment: .bottom, spacing: 0) {
+                if message.role == .user { Spacer(minLength: 60) }
 
-            let bubbleContent = VStack(alignment: message.role == .model ? .leading : .trailing, spacing: 8) {
-                // User-attached image
-                if let image = message.image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 110)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
+                let bubbleContent = VStack(alignment: message.role == .model ? .leading : .trailing, spacing: 8) {
+                    // User-attached image
+                    if let image = message.image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 110)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
 
-                // Text / code blocks
-                if !message.text.isEmpty {
-                    if message.role == .model {
-                        MessageContentView(text: message.text)
-                    } else {
-                        Text(message.text)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.92))
-                            .textSelection(.enabled)
-                            .lineSpacing(3)
+                    // Text / code blocks
+                    if !message.text.isEmpty {
+                        if message.role == .model {
+                            if message.isStreaming {
+                                let revealedText = String(message.text.prefix(message.revealedCharCount))
+                                MessageContentView(text: revealedText)
+                                    .opacity(message.revealedCharCount > 0 ? 1 : 0.3)
+                                    .animation(.easeOut(duration: 0.1), value: message.revealedCharCount)
+                            } else {
+                                MessageContentView(text: message.text)
+                            }
+                        } else {
+                            Text(message.text)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.white.opacity(0.92))
+                                .textSelection(.enabled)
+                                .lineSpacing(3)
+                        }
+                    }
+
+                    // AI-generated images
+                    ForEach(message.generatedImages.indices, id: \.self) { idx in
+                        GeneratedImageView(imageData: message.generatedImages[idx])
                     }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
 
-                // AI-generated images
-                ForEach(message.generatedImages.indices, id: \.self) { idx in
-                    GeneratedImageView(imageData: message.generatedImages[idx])
+                if message.role == .user {
+                    bubbleContent
+                        .glassEffect(.regular.tint(Color.accentColor.opacity(0.12)).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+                } else {
+                    bubbleContent
+                        .glassEffect(.regular.tint(Color.clear).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+                }
+
+                if message.role == .model { Spacer(minLength: 60) }
+            }
+            .onHover { isHovered in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    hoveredMessageId = isHovered ? message.id : nil
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
 
-            if message.role == .user {
-                bubbleContent
-                    .glassEffect(.regular.tint(Color.accentColor.opacity(0.12)).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
-            } else {
-                bubbleContent
-                    .glassEffect(.regular.tint(Color.clear).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+            // Action buttons (only on hover)
+            if hoveredMessageId == message.id {
+                HStack(spacing: 8) {
+                    if message.role == .model {
+                        // Positive rating
+                        Button(action: {
+                            var msg = message
+                            msg.rating = msg.rating == .positive ? nil : .positive
+                            if let idx = viewModel.messages.firstIndex(where: { $0.id == message.id }) {
+                                viewModel.messages[idx] = msg
+                            }
+                        }) {
+                            Image(systemName: message.rating == .positive ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(message.rating == .positive ? Color.accentColor : Color.white.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+
+                        // Negative rating
+                        Button(action: {
+                            var msg = message
+                            msg.rating = msg.rating == .negative ? nil : .negative
+                            if let idx = viewModel.messages.firstIndex(where: { $0.id == message.id }) {
+                                viewModel.messages[idx] = msg
+                            }
+                        }) {
+                            Image(systemName: message.rating == .negative ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(message.rating == .negative ? Color.accentColor : Color.white.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+
+                        // Copy
+                        Button(action: {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(message.text, forType: .string)
+                        }) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        // Edit user message
+                        Button(action: {
+                            if let idx = viewModel.messages.firstIndex(where: { $0.id == message.id }) {
+                                viewModel.editMessageIndex = idx
+                            }
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
-
-            if message.role == .model { Spacer(minLength: 60) }
         }
     }
 
@@ -280,6 +398,7 @@ struct ContentView: View {
                                      ? Color.white.opacity(0.75)
                                      : Color.accentColor)
                     .frame(width: 30, height: 30)
+                    .glassEffect(.regular.interactive(), in: .circle)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -311,6 +430,8 @@ struct ContentView: View {
 
             Button(action: toggleModel) {
                 Text(modelLabel)
+                    .id(modelLabel)
+                    .transition(.opacity)
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.80))
                     .padding(.horizontal, 10)

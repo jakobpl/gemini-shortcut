@@ -5,44 +5,45 @@ import UniformTypeIdentifiers
 // MARK: - GlassUI
 // Shared glass-themed components used by ContentView and SettingsView.
 
-// MARK: - Liquid Orb (Thinking Indicator)
+// MARK: - Typing Dots Loader
 
-struct LiquidOrb: View {
-    @State private var isPulsing = false
+struct TypingDotsView: View {
+    @State private var isAnimating = false
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.accentColor.opacity(0.08))
-                .frame(width: 50, height: 50)
-                .scaleEffect(isPulsing ? 1.35 : 1.0)
-                .blur(radius: 12)
-
-            Circle()
-                .fill(Color.accentColor.opacity(0.18))
-                .frame(width: 32, height: 32)
-                .scaleEffect(isPulsing ? 1.2 : 1.0)
-                .blur(radius: 5)
-
-            Circle()
-                .fill(RadialGradient(
-                    colors: [Color.white.opacity(0.95), Color.accentColor.opacity(0.7)],
-                    center: .topLeading,
-                    startRadius: 0,
-                    endRadius: 12
-                ))
-                .frame(width: 18, height: 18)
-                .overlay(Circle().stroke(Color.white.opacity(0.55), lineWidth: 0.75))
-                .shadow(color: Color.accentColor.opacity(0.4), radius: isPulsing ? 8 : 4, x: 0, y: 0)
-
-            Image(systemName: "sparkles")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Color.white)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
-                isPulsing = true
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.white.opacity(0.9))
+                    .frame(width: 5, height: 5)
+                    .scaleEffect(isAnimating && getScale(for: index) > 0 ? getScale(for: index) : 1.0)
+                    .opacity(isAnimating ? getOpacity(for: index) : 1.0)
             }
+        }
+        .frame(width: 24, height: 8)
+        .shadow(color: Color.white.opacity(0.3), radius: 2, x: 0, y: 0)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: false)) {
+                isAnimating = true
+            }
+        }
+    }
+
+    private func getScale(for index: Int) -> CGFloat {
+        switch index {
+        case 0: return 1.2
+        case 1: return 1.35
+        case 2: return 1.2
+        default: return 1.0
+        }
+    }
+
+    private func getOpacity(for index: Int) -> Double {
+        switch index {
+        case 0: return 0.6
+        case 1: return 1.0
+        case 2: return 0.6
+        default: return 1.0
         }
     }
 }
@@ -118,6 +119,144 @@ struct GlassTextEditor: View {
     }
 }
 
+// MARK: - Syntax Highlighter
+
+func syntaxHighlight(code: String, language: String) -> Text {
+    let language = language.lowercased()
+
+    let keywords: [String]
+    let stringPatterns: [String]
+    let numberPattern: String?
+    let commentPatterns: [(pattern: String, isMultiline: Bool)]
+    let typePattern: String?
+    let functionPattern: String?
+
+    switch language {
+    case "swift":
+        keywords = ["func", "let", "var", "if", "else", "for", "while", "return", "class", "struct", "enum", "extension", "protocol", "import", "guard", "do", "try", "catch", "throw", "async", "await"]
+        stringPatterns = ["\"[^\"]*\"", "\"\"\"[^\"]*\"\"\""]
+        numberPattern = "\\b[0-9]+(\\.[0-9]+)?\\b"
+        commentPatterns = [(pattern: "//[^\n]*", isMultiline: false), (pattern: "/\\*[\\s\\S]*?\\*/", isMultiline: true)]
+        typePattern = "\\b[A-Z][a-zA-Z0-9]*\\b"
+        functionPattern = "\\b([a-z_][a-zA-Z0-9_]*)\\s*\\("
+
+    case "python":
+        keywords = ["def", "class", "if", "else", "elif", "for", "while", "return", "import", "from", "as", "try", "except", "finally", "with", "lambda", "pass", "break", "continue"]
+        stringPatterns = ["\"[^\"]*\"", "'[^']*'", "\"\"\"[^\"]*\"\"\"", "'''[^']*'''"]
+        numberPattern = "\\b[0-9]+(\\.[0-9]+)?\\b"
+        commentPatterns = [(pattern: "#[^\n]*", isMultiline: false)]
+        typePattern = nil
+        functionPattern = "\\b([a-z_][a-zA-Z0-9_]*)\\s*\\("
+
+    case "javascript", "typescript", "js", "ts":
+        keywords = ["function", "const", "let", "var", "if", "else", "for", "while", "return", "class", "import", "export", "async", "await", "try", "catch", "throw", "new"]
+        stringPatterns = ["\"[^\"]*\"", "'[^']*'", "`[^`]*`"]
+        numberPattern = "\\b[0-9]+(\\.[0-9]+)?\\b"
+        commentPatterns = [(pattern: "//[^\n]*", isMultiline: false), (pattern: "/\\*[\\s\\S]*?\\*/", isMultiline: true)]
+        typePattern = "\\b[A-Z][a-zA-Z0-9]*\\b"
+        functionPattern = "\\b([a-z_][a-zA-Z0-9_]*)\\s*\\("
+
+    case "bash", "sh":
+        keywords = ["if", "then", "else", "elif", "fi", "for", "do", "done", "while", "case", "esac", "function", "return", "export", "local"]
+        stringPatterns = ["\"[^\"]*\"", "'[^']*'"]
+        numberPattern = "\\b[0-9]+(\\.[0-9]+)?\\b"
+        commentPatterns = [(pattern: "#[^\n]*", isMultiline: false)]
+        typePattern = nil
+        functionPattern = nil
+
+    default:
+        return Text(code).foregroundStyle(Color.white.opacity(0.90))
+    }
+
+    let nsString = code as NSString
+    let nsRange = NSRange(location: 0, length: nsString.length)
+
+    var coloredRanges: [(range: NSRange, color: Color)] = []
+
+    let keywordColor = Color(red: 0.78, green: 0.57, blue: 0.92)
+    let stringColor = Color(red: 0.97, green: 0.49, blue: 0.42)
+    let numberColor = Color(red: 0.53, green: 0.87, blue: 1.0)
+    let commentColor = Color(red: 0.33, green: 0.43, blue: 0.46)
+    let typeColor = Color(red: 1.0, green: 0.79, blue: 0.42)
+    let functionColor = Color(red: 0.51, green: 0.67, blue: 1.0)
+
+    for comment in commentPatterns {
+        if let regex = try? NSRegularExpression(pattern: comment.pattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                coloredRanges.append((range: match.range, color: commentColor))
+            }
+        }
+    }
+
+    for pattern in stringPatterns {
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                coloredRanges.append((range: match.range, color: stringColor))
+            }
+        }
+    }
+
+    for keyword in keywords {
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                coloredRanges.append((range: match.range, color: keywordColor))
+            }
+        }
+    }
+
+    if let numberPattern = numberPattern {
+        if let regex = try? NSRegularExpression(pattern: numberPattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                coloredRanges.append((range: match.range, color: numberColor))
+            }
+        }
+    }
+
+    if let typePattern = typePattern {
+        if let regex = try? NSRegularExpression(pattern: typePattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                coloredRanges.append((range: match.range, color: typeColor))
+            }
+        }
+    }
+
+    if let functionPattern = functionPattern {
+        if let regex = try? NSRegularExpression(pattern: functionPattern, options: []) {
+            for match in regex.matches(in: code, options: [], range: nsRange) {
+                if match.numberOfRanges > 1 {
+                    coloredRanges.append((range: match.range(at: 1), color: functionColor))
+                }
+            }
+        }
+    }
+
+    var result = Text("")
+    var lastEnd = 0
+
+    let sortedRanges = coloredRanges.sorted { $0.range.location < $1.range.location }
+
+    for (range, color) in sortedRanges {
+        if range.location > lastEnd {
+            let plainRange = NSRange(location: lastEnd, length: range.location - lastEnd)
+            let plainText = nsString.substring(with: plainRange)
+            result = result + Text(plainText).foregroundStyle(Color.white.opacity(0.90))
+        }
+
+        let coloredText = nsString.substring(with: range)
+        result = result + Text(coloredText).foregroundStyle(color)
+
+        lastEnd = range.location + range.length
+    }
+
+    if lastEnd < code.count {
+        let remaining = nsString.substring(with: NSRange(location: lastEnd, length: code.count - lastEnd))
+        result = result + Text(remaining).foregroundStyle(Color.white.opacity(0.90))
+    }
+
+    return result
+}
+
 // MARK: - Code Block View
 // Renders a fenced code block with IDE-style chrome: language label, copy button,
 // dark background, monospaced font, and horizontal scroll for long lines.
@@ -162,9 +301,8 @@ struct CodeBlockView: View {
 
             // Code content with horizontal scroll
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code.trimmingCharacters(in: .newlines))
+                syntaxHighlight(code: code, language: language)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.90))
                     .textSelection(.enabled)
                     .lineSpacing(2)
                     .padding(12)

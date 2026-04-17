@@ -5,6 +5,10 @@ enum ChatRole: String, Codable {
     case user, model
 }
 
+enum MessageRating: String, Codable {
+    case positive, negative
+}
+
 struct ChatMessage: Identifiable, Equatable {
     let id: UUID
     let role: ChatRole
@@ -12,6 +16,8 @@ struct ChatMessage: Identifiable, Equatable {
     var image: NSImage?          // user-attached image (not persisted)
     var generatedImages: [Data]  // AI-generated image PNG data (persisted)
     var isStreaming: Bool
+    var rating: MessageRating?   // user feedback (persisted)
+    var revealedCharCount: Int   // for fade-in streaming text animation
     let timestamp: Date
 
     init(
@@ -21,6 +27,8 @@ struct ChatMessage: Identifiable, Equatable {
         image: NSImage? = nil,
         isStreaming: Bool = false,
         generatedImages: [Data] = [],
+        rating: MessageRating? = nil,
+        revealedCharCount: Int = 0,
         timestamp: Date = Date()
     ) {
         self.id = id
@@ -29,6 +37,8 @@ struct ChatMessage: Identifiable, Equatable {
         self.image = image
         self.generatedImages = generatedImages
         self.isStreaming = isStreaming
+        self.rating = rating
+        self.revealedCharCount = revealedCharCount
         self.timestamp = timestamp
     }
 
@@ -36,7 +46,9 @@ struct ChatMessage: Identifiable, Equatable {
         lhs.id == rhs.id &&
         lhs.text == rhs.text &&
         lhs.isStreaming == rhs.isStreaming &&
-        lhs.generatedImages.count == rhs.generatedImages.count
+        lhs.generatedImages.count == rhs.generatedImages.count &&
+        lhs.rating == rhs.rating &&
+        lhs.revealedCharCount == rhs.revealedCharCount
     }
 }
 
@@ -48,4 +60,5 @@ struct PersistedMessage: Codable {
     let text: String
     let generatedImages: [Data]
     let timestamp: Double   // timeIntervalSince1970
+    let rating: String?     // "positive" or "negative"
 }

@@ -1,3 +1,6 @@
+*.txt
+*.md
+
 # Xcode build artifacts
 build/
 DerivedData/

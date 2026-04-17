@@ -10,6 +10,7 @@ final class ChatViewModel: ObservableObject {
     @Published var attachedImage: NSImage?
     @Published var isLoading = false
     @Published var isRecording = false
+    @Published var editMessageIndex: Int?
 
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -46,6 +47,7 @@ final class ChatViewModel: ObservableObject {
                 image: nil,
                 isStreaming: false,
                 generatedImages: p.generatedImages,
+                rating: p.rating.flatMap { MessageRating(rawValue: $0) },
                 timestamp: Date(timeIntervalSince1970: p.timestamp)
             )
         }
@@ -58,7 +60,8 @@ final class ChatViewModel: ObservableObject {
                 role: m.role == .user ? "user" : "model",
                 text: m.text,
                 generatedImages: m.generatedImages,
-                timestamp: m.timestamp.timeIntervalSince1970
+                timestamp: m.timestamp.timeIntervalSince1970,
+                rating: m.rating?.rawValue
             )
         }
         guard let data = try? JSONEncoder().encode(persisted) else { return }
@@ -203,6 +206,7 @@ final class ChatViewModel: ObservableObject {
                         }
                     } else if let lastIndex = messages.indices.last {
                         messages[lastIndex].text += chunk
+                        messages[lastIndex].revealedCharCount = min(messages[lastIndex].revealedCharCount + chunk.count, messages[lastIndex].text.count)
                     }
                 }
             } catch {
@@ -212,6 +216,7 @@ final class ChatViewModel: ObservableObject {
             }
             if let lastIndex = messages.indices.last {
                 messages[lastIndex].isStreaming = false
+                messages[lastIndex].revealedCharCount = messages[lastIndex].text.count
             }
         }
     }
