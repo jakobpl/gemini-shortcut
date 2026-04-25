@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		094E35472F9C732100062F79 /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = "<group>"; };
 		099CA1EC2F8EBE610032855B /* gemini-shortcut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "gemini-shortcut.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = SOURCE_ROOT; };
 		099CA2912F90397D0032855B /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = "<group>"; };
@@ -31,6 +32,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		094E354D2F9C732100062F79 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		099CA1E32F8EBE610032855B = {
 			isa = PBXGroup;
 			children = (
@@ -98,7 +106,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "gemini-shortcut" */;
+			buildConfigurationList = 099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "void" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -114,6 +122,10 @@
 				{
 					ProductGroup = 099CA2972F90397D0032855B /* Products */;
 					ProjectRef = 099CA2912F90397D0032855B /* gemini-shortcut.xcodeproj */;
+				},
+				{
+					ProductGroup = 094E354D2F9C732100062F79 /* Products */;
+					ProjectRef = 094E35472F9C732100062F79 /* gemini-shortcut.xcodeproj */;
 				},
 				{
 					ProductGroup = 099CA2A32F90397E0032855B /* Products */;
@@ -343,7 +355,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "gemini-shortcut" */ = {
+		099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "void" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				099CA1F52F8EBE620032855B /* Debug */,

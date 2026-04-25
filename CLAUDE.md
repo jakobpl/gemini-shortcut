@@ -110,3 +110,24 @@ The app requires the following capabilities (see `gemini-shortcut.entitlements`)
 - Screen recording permission for screenshot capture
 - Network access for Gemini API calls
 - Unrestricted file access (`ENABLE_USER_SELECTED_FILES = readonly` is set but sandbox is disabled)
+
+## App Vision & Requirements
+
+The core idea is a **fast, lightweight Gemini client** that lives in the menu bar and appears instantly on a hotkey. Key product requirements:
+
+- **Attachments**: Users can take screenshots, attach images, and attach files.
+- **Rich Rendering**: Math equations render as images (not plain LaTeX). Code blocks render with syntax highlighting and a copy button.
+- **Interactions**: Every model response has copy, thumbs-up, and thumbs-down action buttons.
+- **Streaming**: Responses stream in token-by-token. The final block animates elegantly with a left-to-right fade-in reveal.
+- **Native Components**: Model selection and the file-attach button must use native SwiftUI controls (Menu, Pill toggle, etc.), not custom chrome.
+- **Liquid Glass**: The entire UI uses Apple's native `.glassEffect()` material. Do not fight the material with extra blur backgrounds, animated borders, or shimmer overlays.
+
+## Team Mnemonic
+
+When evaluating changes, follow this order:
+1. Are the requirements stupid?
+2. Delete all unnecessary.
+3. Process or delete.
+4. Optimize.
+5. Accelerate.
+6. Automate.

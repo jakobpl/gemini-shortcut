@@ -47,7 +47,7 @@ final class GeminiAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Message windowing: summarise older messages, keep 6 most recent
-        let meaningfulMessages = messages.filter { !$0.text.isEmpty || $0.image != nil }
+        let meaningfulMessages = messages.filter { !$0.text.isEmpty || !$0.images.isEmpty }
         let windowedMessages: [ChatMessage]
         if meaningfulMessages.count <= 6 {
             windowedMessages = meaningfulMessages
@@ -58,7 +58,7 @@ final class GeminiAPI {
             let summaryMessage = ChatMessage(
                 role: .user,
                 text: "[Previous conversation context]\n\(summaryText)",
-                image: nil,
+                images: [],
                 isStreaming: false
             )
             windowedMessages = [summaryMessage] + Array(meaningfulMessages.suffix(6))
@@ -70,14 +70,16 @@ final class GeminiAPI {
             if !message.text.isEmpty {
                 parts.append(["text": message.text])
             }
-            if let image = message.image, let pngData = ScreenshotService.pngData(from: image) {
-                let base64 = pngData.base64EncodedString()
-                parts.append([
-                    "inlineData": [
-                        "mimeType": "image/png",
-                        "data": base64
-                    ]
-                ])
+            for image in message.images {
+                if let pngData = ScreenshotService.pngData(from: image) {
+                    let base64 = pngData.base64EncodedString()
+                    parts.append([
+                        "inlineData": [
+                            "mimeType": "image/png",
+                            "data": base64
+                        ]
+                    ])
+                }
             }
             guard !parts.isEmpty else { continue }
             contents.append([

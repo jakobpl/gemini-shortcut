@@ -1,13 +1,4 @@
-#see the following documentation
-https://developer.apple.com/design/human-interface-guidelines/text-fields
-https://developer.apple.com/design/human-interface-guidelines/toggles
-https://developer.apple.com/design/human-interface-guidelines/progress-indicators
-https://developer.apple.com/design/human-interface-guidelines/menus-and-actions
-https://developer.apple.com/design/human-interface-guidelines/materials
-https://developer.apple.com/design/human-interface-guidelines/buttons
-https://developer.apple.com/design/human-interface-guidelines/search-fields
-https://developer.apple.com/design/human-interface-guidelines/keyboards
-https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
+
 
 
 # Liquid Glass Implementation Guide
@@ -349,3 +340,15 @@ The response streams in token by token via `AsyncStream<String>`.
 - [x] Remove model picker from SettingsView — model lives in chat input pill only.
 - [x] Replace "+" screenshot shortcut with a Menu dropdown (Take Screenshot / Attach File).
 - [x] Add code comments to all UI components documenting what triggers them.
+
+
+## see the following documentation
+https://developer.apple.com/design/human-interface-guidelines/text-fields
+https://developer.apple.com/design/human-interface-guidelines/toggles
+https://developer.apple.com/design/human-interface-guidelines/progress-indicators
+https://developer.apple.com/design/human-interface-guidelines/menus-and-actions
+https://developer.apple.com/design/human-interface-guidelines/materials
+https://developer.apple.com/design/human-interface-guidelines/buttons
+https://developer.apple.com/design/human-interface-guidelines/search-fields
+https://developer.apple.com/design/human-interface-guidelines/keyboards
+https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views

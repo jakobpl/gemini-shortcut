@@ -13,7 +13,7 @@ struct ChatMessage: Identifiable, Equatable {
     let id: UUID
     let role: ChatRole
     var text: String
-    var image: NSImage?          // user-attached image (not persisted)
+    var images: [NSImage] = []  // user-attached images (not persisted)
     var generatedImages: [Data]  // AI-generated image PNG data (persisted)
     var isStreaming: Bool
     var rating: MessageRating?   // user feedback (persisted)
@@ -24,7 +24,7 @@ struct ChatMessage: Identifiable, Equatable {
         id: UUID = UUID(),
         role: ChatRole,
         text: String,
-        image: NSImage? = nil,
+        images: [NSImage] = [],
         isStreaming: Bool = false,
         generatedImages: [Data] = [],
         rating: MessageRating? = nil,
@@ -34,7 +34,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.id = id
         self.role = role
         self.text = text
-        self.image = image
+        self.images = images
         self.generatedImages = generatedImages
         self.isStreaming = isStreaming
         self.rating = rating
@@ -46,6 +46,7 @@ struct ChatMessage: Identifiable, Equatable {
         lhs.id == rhs.id &&
         lhs.text == rhs.text &&
         lhs.isStreaming == rhs.isStreaming &&
+        lhs.images.count == rhs.images.count &&
         lhs.generatedImages.count == rhs.generatedImages.count &&
         lhs.rating == rhs.rating &&
         lhs.revealedCharCount == rhs.revealedCharCount

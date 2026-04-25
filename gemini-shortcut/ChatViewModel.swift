@@ -7,7 +7,7 @@ import AVFoundation
 final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var inputText = ""
-    @Published var attachedImage: NSImage?
+    @Published var attachedImages: [NSImage] = []
     @Published var isLoading = false
     @Published var isRecording = false
     @Published var editMessageIndex: Int?
@@ -16,6 +16,8 @@ final class ChatViewModel: ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var tapInstalled = false
+    private var streamingTask: Task<Void, Never>?
 
     private let messagesKey = "gemini-chat-messages"
     private let messagesTimestampKey = "gemini-chat-timestamp"
@@ -44,7 +46,7 @@ final class ChatViewModel: ObservableObject {
                 id: UUID(uuidString: p.id) ?? UUID(),
                 role: p.role == "user" ? .user : .model,
                 text: p.text,
-                image: nil,
+                images: [],
                 isStreaming: false,
                 generatedImages: p.generatedImages,
                 rating: p.rating.flatMap { MessageRating(rawValue: $0) },
@@ -94,20 +96,35 @@ final class ChatViewModel: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
 
+        guard let speechRecognizer else {
+            NSLog("[dictation] SFSpeechRecognizer unavailable for locale \(Locale.current.identifier)")
+            return
+        }
+        guard speechRecognizer.isAvailable else {
+            NSLog("[dictation] SFSpeechRecognizer not available right now")
+            return
+        }
+
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
 
         let inputNode = audioEngine.inputNode
 
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+        recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self else { return }
             if let result {
                 self.inputText = result.bestTranscription.formattedString
             }
+            if let error {
+                NSLog("[dictation] recognitionTask error: \(error.localizedDescription)")
+            }
             if error != nil || (result?.isFinal ?? false) {
                 self.audioEngine.stop()
-                inputNode.removeTap(onBus: 0)
+                if self.tapInstalled {
+                    inputNode.removeTap(onBus: 0)
+                    self.tapInstalled = false
+                }
                 self.recognitionRequest = nil
                 self.recognitionTask = nil
                 self.isRecording = false
@@ -118,12 +135,14 @@ final class ChatViewModel: ObservableObject {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             recognitionRequest.append(buffer)
         }
+        tapInstalled = true
 
         do {
             audioEngine.prepare()
             try audioEngine.start()
             isRecording = true
         } catch {
+            NSLog("[dictation] audioEngine.start() failed: \(error.localizedDescription)")
             cleanupAudio()
         }
     }
@@ -135,8 +154,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func cleanupAudio() {
-        if audioEngine.inputNode.numberOfInputs > 0 {
+        if tapInstalled {
             audioEngine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
         }
         recognitionRequest = nil
         recognitionTask = nil
@@ -146,14 +166,25 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Attachment
 
     func attachScreenshot() {
-        guard attachedImage == nil else {
-            attachedImage = nil
-            return
-        }
         let screen = NSApp.keyWindow?.screen
         Task {
             if let image = await ScreenshotService.captureScreen(for: screen) {
-                attachedImage = image
+                attachedImages.append(image)
+            }
+        }
+    }
+
+    func attachRegionScreenshot() {
+        Task {
+            let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("snippet.png")
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            proc.arguments = ["-i", "-s", tmp.path]
+            try? proc.run()
+            proc.waitUntilExit()
+            if let img = NSImage(contentsOf: tmp) {
+                await MainActor.run { self.attachedImages.append(img) }
+                try? FileManager.default.removeItem(at: tmp)
             }
         }
     }
@@ -169,7 +200,7 @@ final class ChatViewModel: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let image = NSImage(contentsOf: url) else { return }
-        attachedImage = image
+        attachedImages.append(image)
     }
 
     // MARK: - Send
@@ -180,17 +211,17 @@ final class ChatViewModel: ObservableObject {
         let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
 
-        let userMessage = ChatMessage(role: .user, text: prompt, image: attachedImage, isStreaming: false)
+        let userMessage = ChatMessage(role: .user, text: prompt, images: attachedImages, isStreaming: false)
         messages.append(userMessage)
 
-        let placeholder = ChatMessage(role: .model, text: "", image: nil, isStreaming: true)
+        let placeholder = ChatMessage(role: .model, text: "", images: [], isStreaming: true)
         messages.append(placeholder)
 
         isLoading = true
         inputText = ""
-        attachedImage = nil
+        attachedImages = []
 
-        Task {
+        streamingTask = Task {
             defer {
                 isLoading = false
                 saveMessages()
@@ -219,5 +250,21 @@ final class ChatViewModel: ObservableObject {
                 messages[lastIndex].revealedCharCount = messages[lastIndex].text.count
             }
         }
+    }
+
+    func cancelStreaming() {
+        streamingTask?.cancel()
+        streamingTask = nil
+        isLoading = false
+
+        if let lastIndex = messages.indices.last, messages[lastIndex].role == .model {
+            messages.removeLast()
+        }
+
+        if let userMsgIndex = messages.lastIndex(where: { $0.role == .user }) {
+            inputText = messages[userMsgIndex].text
+        }
+
+        saveMessages()
     }
 }

@@ -47,6 +47,11 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		099CA2A52F91F0960032855B /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -99,6 +104,12 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 099CA1ED2F8EBE610032855B /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 099CA2A52F91F0960032855B /* Products */;
+					ProjectRef = 099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				099CA1EB2F8EBE610032855B /* gemini-shortcut */,
@@ -252,7 +263,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "gemini-shortcut/gemini-shortcut.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "gemini-shortcut.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -288,7 +299,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "gemini-shortcut/gemini-shortcut.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "gemini-shortcut.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
