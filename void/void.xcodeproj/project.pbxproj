@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		099CA1EC2F8EBE610032855B /* gemini-shortcut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "gemini-shortcut.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = SOURCE_ROOT; };
+		099CA1EC2F8EBE610032855B /* void.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = void.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		099CA2882F9035300032855B /* void.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = void.xcodeproj; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		099CA1EE2F8EBE610032855B /* gemini-shortcut */ = {
+		099CA1EE2F8EBE610032855B /* void */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "gemini-shortcut";
+			path = void;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,8 +33,8 @@
 		099CA1E32F8EBE610032855B = {
 			isa = PBXGroup;
 			children = (
-				099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */,
-				099CA1EE2F8EBE610032855B /* gemini-shortcut */,
+				099CA2882F9035300032855B /* void.xcodeproj */,
+				099CA1EE2F8EBE610032855B /* void */,
 				099CA1ED2F8EBE610032855B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -42,22 +42,17 @@
 		099CA1ED2F8EBE610032855B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				099CA1EC2F8EBE610032855B /* gemini-shortcut.app */,
+				099CA1EC2F8EBE610032855B /* void.app */,
 			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		099CA2A52F91F0960032855B /* Products */ = {
-			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		099CA1EB2F8EBE610032855B /* gemini-shortcut */ = {
+		099CA1EB2F8EBE610032855B /* void */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 099CA1F72F8EBE620032855B /* Build configuration list for PBXNativeTarget "gemini-shortcut" */;
+			buildConfigurationList = 099CA1F72F8EBE620032855B /* Build configuration list for PBXNativeTarget "void" */;
 			buildPhases = (
 				099CA1E82F8EBE610032855B /* Sources */,
 				099CA1E92F8EBE610032855B /* Frameworks */,
@@ -68,13 +63,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				099CA1EE2F8EBE610032855B /* gemini-shortcut */,
+				099CA1EE2F8EBE610032855B /* void */,
 			);
-			name = "gemini-shortcut";
+			name = void;
 			packageProductDependencies = (
 			);
 			productName = "gemini-shortcut";
-			productReference = 099CA1EC2F8EBE610032855B /* gemini-shortcut.app */;
+			productReference = 099CA1EC2F8EBE610032855B /* void.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -92,7 +87,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "gemini-shortcut" */;
+			buildConfigurationList = 099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "void" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -104,15 +99,9 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 099CA1ED2F8EBE610032855B /* Products */;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 099CA2A52F91F0960032855B /* Products */;
-					ProjectRef = 099CA2882F9035300032855B /* gemini-shortcut.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
-				099CA1EB2F8EBE610032855B /* gemini-shortcut */,
+				099CA1EB2F8EBE610032855B /* void */,
 			);
 		};
 /* End PBXProject section */
@@ -333,7 +322,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "gemini-shortcut" */ = {
+		099CA1E72F8EBE610032855B /* Build configuration list for PBXProject "void" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				099CA1F52F8EBE620032855B /* Debug */,
@@ -342,7 +331,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		099CA1F72F8EBE620032855B /* Build configuration list for PBXNativeTarget "gemini-shortcut" */ = {
+		099CA1F72F8EBE620032855B /* Build configuration list for PBXNativeTarget "void" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				099CA1F82F8EBE620032855B /* Debug */,
