@@ -5,6 +5,19 @@ import UniformTypeIdentifiers
 // MARK: - GlassUI
 // Shared glass-themed components used by ContentView and SettingsView.
 
+// MARK: - Window Drag Bar
+
+struct WindowDragBar: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        DragBarView()
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class DragBarView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+}
+
 // MARK: - Spinning Arc Loader
 
 struct SpinnerView: View {
@@ -118,6 +131,9 @@ struct ChatInputField: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             parent.text = tv.string
+            // Notify the panel so it can resize when the input grows
+            let height = tv.layoutManager?.usedRect(for: tv.textContainer!).height ?? 0
+            NotificationCenter.default.post(name: .geminiInputHeightChanged, object: height)
         }
     }
 }
@@ -160,10 +176,191 @@ final class SubmitTextView: NSTextView {
         }
         super.keyDown(with: event)
     }
+
+    override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        if let image = NSImage(pasteboard: pasteboard) {
+            NotificationCenter.default.post(name: .geminiPasteImage, object: image)
+            return
+        }
+        super.paste(sender)
+    }
 }
 
 extension Notification.Name {
     static let geminiFocusInput = Notification.Name("GeminiFocusInput")
+    static let geminiInputHeightChanged = Notification.Name("GeminiInputHeightChanged")
+    static let geminiPasteImage = Notification.Name("GeminiPasteImage")
+}
+
+// MARK: - Selectable Bubble Text (AppKit-backed)
+
+struct SelectableBubbleText: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = BubbleSelectableScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.borderType = .noBorder
+        scroll.autohidesScrollers = true
+        scroll.verticalScrollElasticity = .none
+        scroll.horizontalScrollElasticity = .none
+        scroll.contentView = BubbleSelectableClipView()
+
+        let tv = BubbleSelectableTextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isRichText = false
+        tv.drawsBackground = false
+        tv.backgroundColor = .clear
+        tv.textColor = NSColor.white.withAlphaComponent(0.92)
+        tv.font = NSFont.systemFont(ofSize: 14, weight: .regular)
+        tv.textContainerInset = NSSize(width: 0, height: 0)
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.isHorizontallyResizable = false
+        tv.isVerticallyResizable = false
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.heightTracksTextView = false
+        tv.string = text
+
+        scroll.documentView = tv
+        return scroll
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let tv = nsView.documentView as? BubbleSelectableTextView else { return }
+        if tv.string != text {
+            tv.string = text
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+        guard let tv = nsView.documentView as? BubbleSelectableTextView else { return nil }
+
+        // ProposedViewSize can be nil/inf during layout probes; clamp to a sane finite width.
+        let proposedWidth = proposal.width ?? 320
+        let targetWidth = proposedWidth.isFinite && proposedWidth > 0 ? proposedWidth : 320
+
+        if tv.frame.width != targetWidth {
+            tv.frame.size.width = targetWidth
+        }
+        tv.textContainer?.containerSize = NSSize(width: targetWidth, height: .greatestFiniteMagnitude)
+        tv.layoutManager?.ensureLayout(for: tv.textContainer!)
+
+        let usedHeight = tv.layoutManager?.usedRect(for: tv.textContainer!).height ?? 0
+        let textHeight = ceil(usedHeight + (tv.textContainerInset.height * 2))
+
+        return CGSize(width: targetWidth, height: max(20, textHeight))
+    }
+}
+
+struct SelectableMarkdownBubbleText: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = BubbleSelectableScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.borderType = .noBorder
+        scroll.autohidesScrollers = true
+        scroll.verticalScrollElasticity = .none
+        scroll.horizontalScrollElasticity = .none
+        scroll.contentView = BubbleSelectableClipView()
+
+        let tv = BubbleSelectableTextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isRichText = true
+        tv.importsGraphics = false
+        tv.drawsBackground = false
+        tv.backgroundColor = .clear
+        tv.textContainerInset = NSSize(width: 0, height: 0)
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.isHorizontallyResizable = false
+        tv.isVerticallyResizable = false
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.heightTracksTextView = false
+        tv.textStorage?.setAttributedString(makeMarkdownAttributedString(from: text))
+
+        scroll.documentView = tv
+        return scroll
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let tv = nsView.documentView as? BubbleSelectableTextView else { return }
+        let next = makeMarkdownAttributedString(from: text)
+        tv.textStorage?.setAttributedString(next)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+        guard let tv = nsView.documentView as? BubbleSelectableTextView else { return nil }
+
+        // ProposedViewSize can be nil/inf during layout probes; clamp to a sane finite width.
+        let proposedWidth = proposal.width ?? 320
+        let targetWidth = proposedWidth.isFinite && proposedWidth > 0 ? proposedWidth : 320
+
+        if tv.frame.width != targetWidth {
+            tv.frame.size.width = targetWidth
+        }
+        tv.textContainer?.containerSize = NSSize(width: targetWidth, height: .greatestFiniteMagnitude)
+        tv.layoutManager?.ensureLayout(for: tv.textContainer!)
+
+        let usedHeight = tv.layoutManager?.usedRect(for: tv.textContainer!).height ?? 0
+        let textHeight = ceil(usedHeight + (tv.textContainerInset.height * 2))
+
+        return CGSize(width: targetWidth, height: max(20, textHeight))
+    }
+
+    private func makeMarkdownAttributedString(from source: String) -> NSAttributedString {
+        let base = NSMutableAttributedString(string: source, attributes: [
+            .foregroundColor: NSColor.white.withAlphaComponent(0.92),
+            .font: NSFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        guard let parsed = try? AttributedString(markdown: source, options: options) else {
+            return base
+        }
+
+        var parsedStyled = parsed
+        parsedStyled.foregroundColor = .white.opacity(0.92)
+        parsedStyled.font = .system(.body, design: .rounded)
+
+        // Keep inline code readable in a monospace face.
+        for run in parsedStyled.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            parsedStyled[run.range].font = .system(.callout, design: .monospaced)
+        }
+
+        if let nsAttr = try? NSAttributedString(parsedStyled, including: \.appKit) {
+            let ns = NSMutableAttributedString(attributedString: nsAttr)
+            let full = NSRange(location: 0, length: ns.length)
+            ns.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.92), range: full)
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineSpacing = 3
+            ns.addAttribute(.paragraphStyle, value: paragraph, range: full)
+            return ns
+        }
+
+        return base
+    }
+}
+
+private final class BubbleSelectableTextView: NSTextView {
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+private final class BubbleSelectableClipView: NSClipView {
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+private final class BubbleSelectableScrollView: NSScrollView {
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 // MARK: - Glass Text Editor
@@ -388,13 +585,8 @@ struct CodeBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header bar — dot row + language label + copy
+            // Header bar — language label + copy
             HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    Circle().fill(Color(red: 1.0, green: 0.373, blue: 0.333)).frame(width: 10, height: 10)
-                    Circle().fill(Color(red: 1.0, green: 0.741, blue: 0.133)).frame(width: 10, height: 10)
-                    Circle().fill(Color(red: 0.157, green: 0.800, blue: 0.251)).frame(width: 10, height: 10)
-                }
                 if !language.isEmpty {
                     Text(language.lowercased())
                         .font(.system(.caption2, design: .monospaced, weight: .semibold))
@@ -587,13 +779,13 @@ struct FractionView: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(renderMathInline(numerator))
-                .font(.system(.callout, design: .serif).italic())
+                .font(.system(.body, design: .serif, weight: .medium).italic())
                 .foregroundStyle(Color.white.opacity(0.95))
             Rectangle()
                 .fill(Color.white.opacity(0.65))
-                .frame(height: 0.8)
+                .frame(height: 1.2)
             Text(renderMathInline(denominator))
-                .font(.system(.callout, design: .serif).italic())
+                .font(.system(.body, design: .serif, weight: .medium).italic())
                 .foregroundStyle(Color.white.opacity(0.95))
         }
         .padding(.horizontal, 4)
@@ -607,16 +799,16 @@ struct SqrtView: View {
     var body: some View {
         HStack(spacing: 0) {
             Text("√")
-                .font(.system(.title3, design: .serif))
+                .font(.system(.title2, design: .serif, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.95))
             Text(renderMathInline(content))
-                .font(.system(.callout, design: .serif).italic())
+                .font(.system(.body, design: .serif, weight: .medium).italic())
                 .foregroundStyle(Color.white.opacity(0.95))
                 .padding(.top, 2)
                 .overlay(
                     Rectangle()
                         .fill(Color.white.opacity(0.65))
-                        .frame(height: 0.8)
+                        .frame(height: 1.2)
                         .padding(.horizontal, -1),
                     alignment: .top
                 )
@@ -687,6 +879,31 @@ private func toSubscript(_ s: String) -> String {
 func renderMathInline(_ raw: String) -> String {
     var s = raw
 
+    // Replace \frac{a}{b} with (a)/(b) using Unicode rendering for nested content
+    let fracPattern = #"\\frac\{([^{}]*)\}\{([^{}]*)\}"#
+    if let fracRegex = try? NSRegularExpression(pattern: fracPattern) {
+        let ns = s as NSString
+        let matches = fracRegex.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed()
+        for m in matches {
+            let num = ns.substring(with: m.range(at: 1))
+            let den = ns.substring(with: m.range(at: 2))
+            let replacement = "(\(renderMathInline(num)))/(\(renderMathInline(den)))"
+            s = ns.replacingCharacters(in: m.range, with: replacement)
+        }
+    }
+
+    // Replace \sqrt{x} with √x
+    let sqrtPattern = #"\\sqrt\{([^{}]*)\}"#
+    if let sqrtRegex = try? NSRegularExpression(pattern: sqrtPattern) {
+        let ns = s as NSString
+        let matches = sqrtRegex.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed()
+        for m in matches {
+            let content = ns.substring(with: m.range(at: 1))
+            let replacement = "√(\(renderMathInline(content)))"
+            s = ns.replacingCharacters(in: m.range, with: replacement)
+        }
+    }
+
     // \symbol tokens → unicode
     let tokenRegex = try? NSRegularExpression(pattern: "\\\\([A-Za-z]+)")
     if let tokenRegex {
@@ -704,9 +921,6 @@ func renderMathInline(_ raw: String) -> String {
     s = replaceMathScript(in: s, marker: "^", mapFn: toSuperscript)
     // Subscripts: _{...} or _x
     s = replaceMathScript(in: s, marker: "_", mapFn: toSubscript)
-
-    // Multiplication * between numbers/letters → · for prettiness (optional)
-    // Leave unchanged to avoid confusion with markdown emphasis.
 
     return s
 }
@@ -790,27 +1004,97 @@ func parseTextSegmentsWithMath(_ raw: String) -> [TextSegment] {
     return segments.isEmpty ? [.text(raw)] : segments
 }
 
-struct MathImageView: View {
+// MARK: - Math Expression View
+// Renders LaTeX math locally using Unicode symbols and custom 2-D views.
+
+struct MathExpressionView: View {
     let latex: String
     let isBlock: Bool
-    
+
     var body: some View {
-        let encoded = "\\dpi{200}\\bg_transparent\\color{white}" + latex
-        if let url = URL(string: "https://latex.codecogs.com/png.image?" + encoded.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image
-                        .fixedSize()
-                        .padding(.vertical, isBlock ? 8 : 0)
-                } else if phase.error != nil {
-                    Text(latex).font(.system(.body, design: .monospaced)).foregroundStyle(.red)
-                } else {
-                    ProgressView().controlSize(.small)
-                }
+        let trimmed = latex.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Group {
+            if let fraction = parseFraction(trimmed) {
+                FractionView(numerator: fraction.num, denominator: fraction.den)
+            } else if let sqrtContent = parseSqrt(trimmed) {
+                SqrtView(content: sqrtContent)
+            } else {
+                Text(renderMathInline(trimmed))
+                    .font(.system(.body, design: .serif, weight: .medium).italic())
+                    .foregroundStyle(Color.white.opacity(0.95))
             }
-            .frame(maxWidth: isBlock ? .infinity : nil, alignment: isBlock ? .center : .leading)
         }
+        .padding(.vertical, isBlock ? 8 : 2)
+        .frame(maxWidth: isBlock ? .infinity : nil, alignment: isBlock ? .center : .leading)
     }
+}
+
+private func parseFraction(_ latex: String) -> (num: String, den: String)? {
+    guard latex.hasPrefix(#"\frac"#) else { return nil }
+
+    var index = latex.index(latex.startIndex, offsetBy: 5)
+
+    while index < latex.endIndex && latex[index].isWhitespace {
+        index = latex.index(after: index)
+    }
+
+    guard index < latex.endIndex && latex[index] == "{" else { return nil }
+    index = latex.index(after: index)
+
+    var braceDepth = 1
+    let numStart = index
+    while index < latex.endIndex && braceDepth > 0 {
+        if latex[index] == "{" { braceDepth += 1 }
+        else if latex[index] == "}" { braceDepth -= 1 }
+        if braceDepth > 0 { index = latex.index(after: index) }
+    }
+    guard braceDepth == 0 else { return nil }
+    let numerator = String(latex[numStart..<index])
+    index = latex.index(after: index)
+
+    while index < latex.endIndex && latex[index].isWhitespace {
+        index = latex.index(after: index)
+    }
+
+    guard index < latex.endIndex && latex[index] == "{" else { return nil }
+    index = latex.index(after: index)
+
+    braceDepth = 1
+    let denStart = index
+    while index < latex.endIndex && braceDepth > 0 {
+        if latex[index] == "{" { braceDepth += 1 }
+        else if latex[index] == "}" { braceDepth -= 1 }
+        if braceDepth > 0 { index = latex.index(after: index) }
+    }
+    guard braceDepth == 0 else { return nil }
+    let denominator = String(latex[denStart..<index])
+
+    return (numerator, denominator)
+}
+
+private func parseSqrt(_ latex: String) -> String? {
+    guard latex.hasPrefix(#"\sqrt"#) else { return nil }
+
+    var index = latex.index(latex.startIndex, offsetBy: 5)
+
+    while index < latex.endIndex && latex[index].isWhitespace {
+        index = latex.index(after: index)
+    }
+
+    guard index < latex.endIndex && latex[index] == "{" else { return nil }
+    index = latex.index(after: index)
+
+    var braceDepth = 1
+    let contentStart = index
+    while index < latex.endIndex && braceDepth > 0 {
+        if latex[index] == "{" { braceDepth += 1 }
+        else if latex[index] == "}" { braceDepth -= 1 }
+        if braceDepth > 0 { index = latex.index(after: index) }
+    }
+    guard braceDepth == 0 else { return nil }
+
+    return String(latex[contentStart..<index])
 }
 
 // MARK: - Markdown Text Blocks View
@@ -835,6 +1119,7 @@ struct MarkdownTextBlocksView: View {
                 }
             }
         }
+        .textSelection(.enabled)
     }
 
     private func blockIdentity(_ block: TextBlock) -> String {
@@ -902,36 +1187,86 @@ struct MarkdownTextBlocksView: View {
         }
     }
 
-    @ViewBuilder
     private func inlineText(_ rawText: String, font: Font) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let segments = parseTextSegmentsWithMath(rawText)
-            HStack(alignment: .center, spacing: 2) {
-                ForEach(segments) { segment in
-                    switch segment {
-                    case .text(let t):
-                        if let attrStr = markdownAttributed(t, font: font) {
-                            Text(attrStr)
-                                .foregroundStyle(Color.white.opacity(0.92))
-                                .textSelection(.enabled)
-                                .lineSpacing(3)
-                        } else {
-                            Text(t)
-                                .font(font)
-                                .foregroundStyle(Color.white.opacity(0.92))
-                                .textSelection(.enabled)
-                                .lineSpacing(3)
-                        }
-                    case .inlineMath(let math):
-                        MathImageView(latex: math, isBlock: false)
-                    case .blockMath(let math):
-                        MathImageView(latex: math, isBlock: true)
+        let segments = parseTextSegmentsWithMath(rawText)
+
+        let hasBlockMath = segments.contains { 
+            if case .blockMath = $0 { return true }
+            return false
+        }
+
+        if !hasBlockMath {
+            return AnyView(
+                concatenate(segments, font: font)
+                    .lineSpacing(3)
+            )
+        }
+
+        var rows: [[TextSegment]] = []
+        var currentTextRow: [TextSegment] = []
+
+        for segment in segments {
+            switch segment {
+            case .text, .inlineMath:
+                currentTextRow.append(segment)
+            case .blockMath:
+                if !currentTextRow.isEmpty {
+                    rows.append(currentTextRow)
+                    currentTextRow = []
+                }
+                rows.append([segment])
+            }
+        }
+        if !currentTextRow.isEmpty {
+            rows.append(currentTextRow)
+        }
+
+        return AnyView(
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    if row.count == 1, case .blockMath(let math) = row[0] {
+                        MathExpressionView(latex: math, isBlock: true)
+                    } else {
+                        concatenate(row, font: font)
+                            .lineSpacing(3)
                     }
                 }
-                Spacer(minLength: 0)
             }
-            .fixedSize(horizontal: false, vertical: true)
+        )
+    }
+
+    private func concatenate(_ segments: [TextSegment], font: Font) -> Text {
+        var resultText = Text("")
+        var first = true
+
+        for segment in segments {
+            let nextText: Text
+            switch segment {
+            case .text(let t):
+                if let attrStr = markdownAttributed(t, font: font) {
+                    nextText = Text(attrStr).foregroundColor(.white.opacity(0.92))
+                } else {
+                    nextText = Text(t).font(font).foregroundColor(.white.opacity(0.92))
+                }
+            case .inlineMath(let math):
+                let trimmed = math.trimmingCharacters(in: .whitespacesAndNewlines)
+                nextText = Text(renderMathInline(trimmed))
+                    .font(.system(.body, design: .serif, weight: .medium).italic())
+                    .foregroundColor(.white.opacity(0.95))
+            case .blockMath(let math):
+                let trimmed = math.trimmingCharacters(in: .whitespacesAndNewlines)
+                nextText = Text("\n\n" + renderMathInline(trimmed) + "\n\n")
+                    .font(.system(.title3, design: .serif, weight: .medium).italic())
+                    .foregroundColor(.white.opacity(0.95))
+            }
+            if first {
+                resultText = nextText
+                first = false
+            } else {
+                resultText = resultText + nextText
+            }
         }
+        return resultText
     }
 
     private func markdownAttributed(_ text: String, font: Font) -> AttributedString? {
@@ -953,18 +1288,86 @@ struct MarkdownTextBlocksView: View {
 struct MessageContentView: View {
     let text: String
     var isStreaming: Bool = false
+    var revealedWordCount: Int = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(parseMessageSegments(text)) { segment in
-                switch segment.kind {
-                case .text(let t):
-                    MarkdownTextBlocksView(text: t, animate: isStreaming)
-                case .code(let lang, let code):
-                    CodeBlockView(language: lang, code: code)
+        Group {
+            if isStreaming {
+                StreamingWordRevealText(text: text, revealedWordCount: revealedWordCount)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(parseMessageSegments(text)) { segment in
+                        switch segment.kind {
+                        case .text(let t):
+                            MarkdownTextBlocksView(text: t, animate: false)
+                        case .code(let lang, let code):
+                            CodeBlockView(language: lang, code: code)
+                        }
+                    }
                 }
             }
         }
+        .textSelection(.enabled)
+    }
+}
+
+struct StreamingWordRevealText: View {
+    let text: String
+    let revealedWordCount: Int
+
+    var body: some View {
+        buildRevealText(from: tokenized(text))
+            .font(.system(.body, design: .rounded))
+            .lineSpacing(3)
+            .animation(.easeInOut(duration: 0.18), value: revealedWordCount)
+    }
+
+    private func tokenized(_ source: String) -> [(value: String, isWord: Bool)] {
+        guard !source.isEmpty else { return [] }
+        var tokens: [(String, Bool)] = []
+        var current = ""
+        var currentIsWord: Bool?
+
+        for ch in source {
+            let isWord = !(ch.isWhitespace || ch.isNewline)
+            if currentIsWord == nil {
+                currentIsWord = isWord
+                current.append(ch)
+                continue
+            }
+
+            if currentIsWord == isWord {
+                current.append(ch)
+            } else {
+                tokens.append((current, currentIsWord ?? false))
+                current = String(ch)
+                currentIsWord = isWord
+            }
+        }
+
+        if !current.isEmpty {
+            tokens.append((current, currentIsWord ?? false))
+        }
+
+        return tokens
+    }
+
+    private func buildRevealText(from tokens: [(value: String, isWord: Bool)]) -> Text {
+        var result = Text("")
+        var visibleWordIndex = 0
+
+        for token in tokens {
+            if token.isWord {
+                let isVisible = visibleWordIndex < revealedWordCount
+                let opacity = isVisible ? 0.92 : 0.20
+                result = result + Text(token.value).foregroundColor(.white.opacity(opacity))
+                visibleWordIndex += 1
+            } else {
+                result = result + Text(token.value).foregroundColor(.white.opacity(0.92))
+            }
+        }
+
+        return result
     }
 }
 
@@ -1007,6 +1410,99 @@ struct LeftToRightReveal<Content: View>: View {
                     progress = 1.0
                 }
             }
+    }
+}
+
+// MARK: - Window Resize Handles
+// Invisible corner/edge regions that let the user resize the borderless panel.
+
+enum ResizeCorner {
+    case topLeft, topRight, bottomLeft, bottomRight
+    case topEdge, bottomEdge, leftEdge, rightEdge
+}
+
+struct WindowResizeHandle: NSViewRepresentable {
+    let corner: ResizeCorner
+
+    func makeNSView(context: Context) -> NSView {
+        ResizeHandleNSView(corner: corner)
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class ResizeHandleNSView: NSView {
+    let corner: ResizeCorner
+    private var initialFrame: NSRect = .zero
+    private var initialLocation: NSPoint = .zero
+
+    init(corner: ResizeCorner) {
+        self.corner = corner
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { nil }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window = window else { return }
+        initialFrame = window.frame
+        initialLocation = NSEvent.mouseLocation
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window = window else { return }
+        let currentLocation = NSEvent.mouseLocation
+        let deltaX = currentLocation.x - initialLocation.x
+        let deltaY = currentLocation.y - initialLocation.y
+
+        var newFrame = initialFrame
+        let minWidth: CGFloat = 400
+        let minHeight: CGFloat = 120
+
+        switch corner {
+        case .bottomRight:
+            newFrame.size.width = max(minWidth, initialFrame.width + deltaX)
+            newFrame.size.height = max(minHeight, initialFrame.height - deltaY)
+            newFrame.origin.y = initialFrame.origin.y + (initialFrame.height - newFrame.size.height)
+        case .bottomLeft:
+            let newWidth = max(minWidth, initialFrame.width - deltaX)
+            newFrame.size.height = max(minHeight, initialFrame.height - deltaY)
+            newFrame.origin.x = initialFrame.origin.x + (initialFrame.width - newWidth)
+            newFrame.origin.y = initialFrame.origin.y + (initialFrame.height - newFrame.size.height)
+            newFrame.size.width = newWidth
+        case .topRight:
+            newFrame.size.width = max(minWidth, initialFrame.width + deltaX)
+            newFrame.size.height = max(minHeight, initialFrame.height + deltaY)
+        case .topLeft:
+            let newWidth = max(minWidth, initialFrame.width - deltaX)
+            newFrame.size.height = max(minHeight, initialFrame.height + deltaY)
+            newFrame.origin.x = initialFrame.origin.x + (initialFrame.width - newWidth)
+            newFrame.size.width = newWidth
+        case .topEdge:
+            newFrame.size.height = max(minHeight, initialFrame.height + deltaY)
+        case .bottomEdge:
+            newFrame.size.height = max(minHeight, initialFrame.height - deltaY)
+            newFrame.origin.y = initialFrame.origin.y + (initialFrame.height - newFrame.size.height)
+        case .leftEdge:
+            let newWidth = max(minWidth, initialFrame.width - deltaX)
+            newFrame.origin.x = initialFrame.origin.x + (initialFrame.width - newWidth)
+            newFrame.size.width = newWidth
+        case .rightEdge:
+            newFrame.size.width = max(minWidth, initialFrame.width + deltaX)
+        }
+
+        window.setFrame(newFrame, display: true)
+    }
+
+    override func resetCursorRects() {
+        let cursor: NSCursor
+        switch corner {
+        case .leftEdge, .rightEdge:
+            cursor = .resizeLeftRight
+        case .topEdge, .bottomEdge:
+            cursor = .resizeUpDown
+        default:
+            cursor = .crosshair
+        }
+        addCursorRect(bounds, cursor: cursor)
     }
 }
 

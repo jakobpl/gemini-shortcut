@@ -1,26 +1,17 @@
 import SwiftUI
-
-// MARK: - Scroll Position Tracking
-
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
+import UniformTypeIdentifiers
 
 // MARK: - ContentView
 
 struct ContentView: View {
-    @StateObject private var viewModel = ChatViewModel()
+    @State private var viewModel = ChatViewModel()
     @State private var isHovering = false
     @State private var contentAppeared = false
     @State private var inputAppeared = false
     @State private var showingAttachmentPreview = false
-    @State private var inputBarVisible = true
-    @State private var lastScrollOffset: CGFloat = 0
 
-    @AppStorage("gemini-selected-model") private var selectedModel: String = "gemini-3.1-pro-preview"
+    @AppStorage("selected-provider") private var selectedProvider: ProviderID = .gemini
+    @AppStorage("selected-model") private var selectedModel: String = "gemini-3.1-pro-preview"
 
     private var hasContent: Bool {
         !viewModel.messages.isEmpty || viewModel.isLoading
@@ -28,22 +19,84 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            if !SettingsManager.shared.hasAPIKey {
-                noAPIKeyView
-            } else {
-                chatBody
+            ZStack {
+                VStack(spacing: 0) {
+                    WindowDragBar()
+                        .frame(height: 14)
+
+                    if !SettingsManager.shared.hasAPIKey {
+                        noAPIKeyView
+                    } else {
+                        chatBody
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                actionButtons
             }
-            actionButtons
+            .background {
+                Color.clear
+                    .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
+                    .opacity(hasContent ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.22), value: hasContent)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+
+            // Resize handles — outside the clip shape so they sit at the window edge
+            WindowResizeHandle(corner: .topLeft)
+                .frame(width: 14, height: 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            WindowResizeHandle(corner: .topRight)
+                .frame(width: 14, height: 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            WindowResizeHandle(corner: .bottomLeft)
+                .frame(width: 14, height: 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            WindowResizeHandle(corner: .bottomRight)
+                .frame(width: 14, height: 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            WindowResizeHandle(corner: .topEdge)
+                .frame(height: 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            WindowResizeHandle(corner: .bottomEdge)
+                .frame(height: 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            WindowResizeHandle(corner: .leftEdge)
+                .frame(width: 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            WindowResizeHandle(corner: .rightEdge)
+                .frame(width: 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         }
-        .background {
-            Color.clear
-                .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
-                .opacity(hasContent ? 1 : 0)
-                .animation(.easeInOut(duration: 0.22), value: hasContent)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) { isHovering = hovering }
+        }
+        .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+            loadDroppedImages(from: providers)
+            return true
+        }
+    }
+
+    private func loadDroppedImages(from providers: [NSItemProvider]) {
+        for provider in providers {
+            if provider.canLoadObject(ofClass: NSImage.self) {
+                _ = provider.loadObject(ofClass: NSImage.self) { image, _ in
+                    if let image = image as? NSImage {
+                        DispatchQueue.main.async {
+                            self.viewModel.attachedImages.append(image)
+                        }
+                    }
+                }
+            } else {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    if let image = NSImage(contentsOf: url) {
+                        DispatchQueue.main.async {
+                            self.viewModel.attachedImages.append(image)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -73,6 +126,7 @@ struct ContentView: View {
         }
         .opacity(isHovering ? 1 : 0)
         .animation(.easeInOut(duration: 0.18), value: isHovering)
+        .allowsHitTesting(isHovering)
     }
 
     // MARK: - No API Key
@@ -87,7 +141,7 @@ struct ContentView: View {
                 .foregroundStyle(Color.white.opacity(0.55))
                 .multilineTextAlignment(.center)
         }
-        .frame(width: 520, height: 100)
+        .frame(maxWidth: .infinity, minHeight: 100)
         .padding(.horizontal, 24)
     }
 
@@ -109,11 +163,10 @@ struct ContentView: View {
 
                 inputBarContainer
             }
-            .offset(y: (inputAppeared && inputBarVisible) ? 0 : 100)
-            .opacity((inputAppeared && inputBarVisible) ? 1 : 0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: inputBarVisible)
+            .offset(y: inputAppeared ? 0 : 100)
+            .opacity(inputAppeared ? 1 : 0)
         }
-        .frame(minWidth: 580, maxWidth: 580, minHeight: 60, maxHeight: .infinity)
+        .frame(minWidth: 400, maxWidth: .infinity, minHeight: 60, maxHeight: .infinity)
         .onAppear {
             NotificationCenter.default.post(name: .geminiFocusInput, object: nil)
             withAnimation(.spring(response: 0.48, dampingFraction: 0.72)) {
@@ -132,6 +185,19 @@ struct ContentView: View {
         .onChange(of: viewModel.isLoading) { _, _ in updateHeight() }
         .onChange(of: viewModel.attachedImages) { _, _ in updateHeight() }
         .onChange(of: viewModel.messages) { _, _ in viewModel.saveMessages() }
+        .onReceive(NotificationCenter.default.publisher(for: .geminiInputHeightChanged)) { _ in
+            updateHeight()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .geminiPasteImage)) { notification in
+            if let image = notification.object as? NSImage {
+                viewModel.attachedImages.append(image)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .geminiInjectText)) { notification in
+            if let text = notification.object as? String {
+                viewModel.inputText += text
+            }
+        }
     }
 
     // MARK: - Message List
@@ -169,45 +235,10 @@ struct ContentView: View {
                 .padding(.bottom, 82)
                 .animation(.spring(response: 0.38, dampingFraction: 0.8), value: viewModel.messages.count)
                 .animation(.spring(response: 0.35, dampingFraction: 0.78), value: showThinkingIndicator)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("scrollview")).minY
-                        )
-                    }
-                )
-            }
-            .coordinateSpace(name: "scrollview")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                if viewModel.messages.isEmpty {
-                    inputBarVisible = true
-                } else {
-                    let delta = offset - lastScrollOffset
-                    // Ignore minor jitter; require a few pixels of movement
-                    if delta < -6 {
-                        // scrolling down (content moves up) — reveal input
-                        if !inputBarVisible {
-                            withAnimation(.easeInOut(duration: 0.28)) {
-                                inputBarVisible = true
-                            }
-                        }
-                        lastScrollOffset = offset
-                    } else if delta > 6 {
-                        // scrolling up — hide input
-                        if inputBarVisible {
-                            withAnimation(.easeInOut(duration: 0.28)) {
-                                inputBarVisible = false
-                            }
-                        }
-                        lastScrollOffset = offset
-                    }
-                }
             }
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let last = viewModel.messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                    inputBarVisible = true
                 }
             }
             .onChange(of: viewModel.messages.last?.text) { _, _ in
@@ -225,6 +256,7 @@ struct ContentView: View {
     // MARK: - Message Bubble
 
     @State private var hoveredMessageId: UUID?
+    @State private var copiedUserMessageId: UUID?
 
     private func messageBubble(for message: ChatMessage) -> some View {
         let isLatestUser = message.role == .user
@@ -246,13 +278,15 @@ struct ContentView: View {
                     // Text / code blocks
                     if !message.text.isEmpty {
                         if message.role == .model {
-                            MessageContentView(text: message.text, isStreaming: message.isStreaming)
+                            MessageContentView(
+                                text: message.text,
+                                isStreaming: message.isStreaming,
+                                revealedWordCount: message.revealedWordCount
+                            )
+                            .frame(minHeight: 20)
                         } else {
-                            Text(message.text)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.92))
-                                .textSelection(.enabled)
-                                .lineSpacing(3)
+                            MessageContentView(text: message.text)
+                                .frame(minHeight: 20)
                         }
                     }
 
@@ -266,17 +300,19 @@ struct ContentView: View {
 
                 if message.role == .user {
                     bubbleContent
-                        .glassEffect(.regular.tint(Color.accentColor.opacity(0.12)).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+                        .glassEffect(.regular.tint(Color.accentColor.opacity(0.12)), in: .rect(cornerRadius: 18, style: .continuous))
                 } else {
                     bubbleContent
-                        .glassEffect(.regular.tint(Color.clear).interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+                        .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: .rect(cornerRadius: 18, style: .continuous))
                 }
 
                 if message.role == .model { Spacer(minLength: 60) }
             }
 
-            // Action buttons — always take space, fade in/out on hover
+            // Action buttons
             HStack(spacing: 8) {
+                if message.role == .user { Spacer() }
+
                 if message.role == .model {
                     Button(action: {
                         var msg = message
@@ -315,12 +351,11 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                 } else {
                     Button(action: {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(message.text, forType: .string)
+                        copyUserMessage(message)
                     }) {
-                        Image(systemName: "doc.on.doc")
+                        Image(systemName: copiedUserMessageId == message.id ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.85))
+                            .foregroundStyle(copiedUserMessageId == message.id ? Color.accentColor : Color.white.opacity(0.85))
                     }
                     .buttonStyle(.plain)
 
@@ -328,8 +363,8 @@ struct ContentView: View {
                         EditButton(for: message)
                     }
                 }
-
-                Spacer()
+                
+                if message.role == .model { Spacer() }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
@@ -341,6 +376,8 @@ struct ContentView: View {
         Button(action: {
             if let idx = viewModel.messages.firstIndex(where: { $0.id == message.id }) {
                 viewModel.editMessageIndex = idx
+                viewModel.inputText = viewModel.messages[idx].text
+                NotificationCenter.default.post(name: .geminiFocusInput, object: nil)
             }
         }) {
             Image(systemName: "pencil")
@@ -350,8 +387,22 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
+    private func copyUserMessage(_ message: ChatMessage) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(message.text, forType: .string)
+        withAnimation(.easeInOut(duration: 0.15)) {
+            copiedUserMessageId = message.id
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if copiedUserMessageId == message.id {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    copiedUserMessageId = nil
+                }
+            }
+        }
+    }
+
     // MARK: - Attached Images Carousel
-    // Horizontal scrolling carousel with remove buttons
 
     private var attachedCarouselPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -440,21 +491,9 @@ struct ContentView: View {
                 .frame(height: inputFieldHeight)
             }
 
-            Button(action: toggleModel) {
-                Text(modelLabel)
-                    .id(modelLabel)
-                    .transition(.opacity)
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.80))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .contentShape(Capsule())
-            .keyboardShortcut(.tab, modifiers: .shift)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedModel)
+            modelPickerMenu()
+                .keyboardShortcut(.tab, modifiers: .shift)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedModel)
 
             Button(action: { viewModel.toggleRecording() }) {
                 Image(systemName: viewModel.isRecording ? "mic.fill" : "mic")
@@ -488,15 +527,49 @@ struct ContentView: View {
     }
 
     private var modelLabel: String {
-        selectedModel.contains("flash") ? "flash" : "pro"
+        if let model = ProviderRegistry.model(byWireID: selectedModel) {
+            let parts = model.displayName.split(separator: " ")
+            return String(parts.last ?? Substring(model.displayName))
+        }
+        return "Model"
     }
 
-    private func toggleModel() {
-        if selectedModel.contains("flash") {
-            selectedModel = "gemini-3.1-pro-preview"
-        } else {
-            selectedModel = "gemini-3.1-flash-lite-preview"
+    private func switchModel(_ model: LLMModel) {
+        selectedProvider = model.provider
+        selectedModel = model.id
+        SettingsManager.shared.selectedProvider = model.provider
+        SettingsManager.shared.selectedModel = model.id
+    }
+
+    private func modelPickerMenu() -> some View {
+        Menu {
+            ForEach(ProviderID.allCases) { provider in
+                let models = ProviderRegistry.models(for: provider)
+                let hasKey = provider == .ollama || SettingsManager.shared.hasAPIKey(for: provider) || SettingsManager.shared.isDevBypassEnabled
+                Menu(provider.displayName) {
+                    ForEach(models) { model in
+                        Button(model.displayName) {
+                            switchModel(model)
+                        }
+                        .disabled(!hasKey)
+                    }
+                }
+                .disabled(!hasKey && models.isEmpty)
+            }
+        } label: {
+            Text(modelLabel)
+                .id(modelLabel)
+                .transition(.opacity)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.80))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .contentShape(Capsule())
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     private var sendButton: some View {
@@ -531,12 +604,4 @@ struct ContentView: View {
         let height: CGFloat = hasContent ? 480 : 70
         NotificationCenter.default.post(name: .geminiResizePanel, object: height)
     }
-}
-
-// MARK: - Notifications
-
-extension Notification.Name {
-    static let geminiResizePanel  = Notification.Name("GeminiResizePanel")
-    static let geminiClosePanel   = Notification.Name("GeminiClosePanel")
-    static let geminiPanelDidShow = Notification.Name("GeminiPanelDidShow")
 }

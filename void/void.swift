@@ -2,22 +2,28 @@ import SwiftUI
 import AppKit
 
 @main
-struct gemini_shortcutApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+struct voidApp: App {
+    let controller = PanelController()
+
+    init() {
+        controller.setup()
+    }
 
     var body: some Scene {
         Settings { EmptyView() }
     }
 }
 
-// NSPanel by default returns canBecomeKey = false, which prevents text fields
-// inside the panel from ever receiving first responder. This subclass fixes that.
+// MARK: - KeyablePanel
+
 class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+// MARK: - PanelController
+
+final class PanelController: NSObject, NSWindowDelegate {
     var panel: NSPanel?
     var settingsPanel: NSPanel?
     var statusItem: NSStatusItem?
@@ -32,7 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private let panelOriginKey = "gemini-panel-origin"
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func setup() {
         setupPanel()
         setupSettingsPanel()
         setupStatusBar()
@@ -50,6 +56,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             name: .geminiClosePanel,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePreviewPositionNotification),
+            name: .geminiPreviewPosition,
+            object: nil
+        )
     }
 
     // MARK: - Main Chat Panel
@@ -58,7 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let contentRect = NSRect(x: 0, y: 0, width: 580, height: 70)
         let panel = KeyablePanel(
             contentRect: contentRect,
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -68,7 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
-        panel.isMovableByWindowBackground = true  // drag from anywhere
+        panel.isMovableByWindowBackground = true
         panel.delegate = self
 
         let hostingView = NSHostingView(rootView: ContentView())
@@ -104,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let contentRect = NSRect(x: 0, y: 0, width: 360, height: 330)
         let panel = KeyablePanel(
             contentRect: contentRect,
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -114,7 +126,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
-        panel.isMovableByWindowBackground = true  // drag from anywhere
+        panel.isMovableByWindowBackground = true
         panel.delegate = self
 
         let hostingView = NSHostingView(rootView: SettingsView(dismiss: { [weak self] in
@@ -149,7 +161,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         hidePanel()
-        // App must be active for text fields inside the panel to accept keyboard input
         NSApp.activate(ignoringOtherApps: true)
 
         if let button = statusItem?.button, let screen = NSScreen.main {
@@ -160,7 +171,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let y = screen.visibleFrame.maxY - buttonFrame.height - panelHeight + 8
 
             let finalRect = NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
-            // Bloom-in from a tiny center point
             let startRect = NSRect(x: finalRect.midX - 8, y: finalRect.midY - 8, width: 16, height: 16)
 
             settingsPanel.setFrame(startRect, display: false)
@@ -199,8 +209,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         hideSettingsPanel()
 
-        // Use the screen the panel already lives on (respects user dragging it to another monitor).
-        // Fall back to the screen with the mouse cursor so the first open feels natural.
         if let screen = panel.screen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main {
             let sf = screen.visibleFrame
             let savedOrigin = getSavedPanelOrigin()
@@ -221,7 +229,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 width: panel.frame.width,
                 height: panel.frame.height
             )
-            // Start slightly below and dim — spring up on open
             let startRect = NSRect(
                 x: finalRect.origin.x,
                 y: finalRect.origin.y - 28,
@@ -239,7 +246,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 panel.animator().setFrame(finalRect, display: true)
                 panel.animator().alphaValue = 1
             } completionHandler: {
-                // Let SwiftUI re-establish focus after the panel finishes animating in
                 NotificationCenter.default.post(name: .geminiPanelDidShow, object: nil)
             }
         } else {
@@ -260,10 +266,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             clickMonitor = nil
         }
 
-        // Save panel origin before hiding
         savePanelOrigin(panel.frame.origin)
 
-        // Drop 14px and fade out — liquid retraction feel
         let targetRect = NSRect(
             x: panel.frame.origin.x,
             y: panel.frame.origin.y - 14,
@@ -279,7 +283,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } completionHandler: {
             panel.orderOut(nil)
             panel.alphaValue = 1
-            // Reset to compact height for next open
             if let screen = panel.screen ?? NSScreen.main {
                 let origin = self.getSavedPanelOrigin() ?? NSPoint(x: screen.visibleFrame.midX - panel.frame.width / 2,
                                                                    y: screen.visibleFrame.minY + 100)
@@ -334,7 +337,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func handleResizeNotification(_ notification: Notification) {
         guard let height = notification.object as? CGFloat,
               let panel = panel,
-              let screen = panel.screen ?? NSScreen.main else { return }
+              panel.screen ?? NSScreen.main != nil else { return }
 
         let currentFrame = panel.frame
         let currentOrigin = currentFrame.origin
@@ -359,6 +362,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hidePanel()
     }
 
+    @objc func handlePreviewPositionNotification() {
+        hidePanel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.showPanel()
+        }
+    }
+
     func windowDidResignKey(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
             if window === panel { hidePanel() }
@@ -377,4 +387,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
               saved.count == 2 else { return nil }
         return NSPoint(x: saved[0], y: saved[1])
     }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let geminiResizePanel  = Notification.Name("GeminiResizePanel")
+    static let geminiClosePanel   = Notification.Name("GeminiClosePanel")
+    static let geminiPanelDidShow = Notification.Name("GeminiPanelDidShow")
+    static let geminiInjectText   = Notification.Name("GeminiInjectText")
+    static let geminiPreviewPosition = Notification.Name("GeminiPreviewPosition")
 }

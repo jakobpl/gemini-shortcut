@@ -9,6 +9,7 @@
 /* Begin PBXFileReference section */
 		094E35472F9C732100062F79 /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = "<group>"; };
 		094E35662F9C78FD00062F79 /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = "<group>"; };
+		094E35882F9C795A00062F79 /* void.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = void.xcodeproj; sourceTree = "<group>"; };
 		099CA1EC2F8EBE610032855B /* void.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = void.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		099CA2882F9035300032855B /* void.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = void.xcodeproj; sourceTree = SOURCE_ROOT; };
 		099CA2912F90397D0032855B /* gemini-shortcut.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "gemini-shortcut.xcodeproj"; sourceTree = "<group>"; };
@@ -49,6 +50,13 @@
 		};
 		094E35792F9C78FE00062F79 /* Products */ = {
 			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		094E35A62F9F9E6200062F79 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -142,6 +150,10 @@
 				{
 					ProductGroup = 094E35792F9C78FE00062F79 /* Products */;
 					ProjectRef = 099CA2882F9035300032855B /* void.xcodeproj */;
+				},
+				{
+					ProductGroup = 094E35A62F9F9E6200062F79 /* Products */;
+					ProjectRef = 094E35882F9C795A00062F79 /* void.xcodeproj */;
 				},
 			);
 			projectRoot = "";

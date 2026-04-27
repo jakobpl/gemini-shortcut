@@ -1,64 +1,34 @@
-# Swift & SwiftUI Guide for Gemini Shortcut
+# Swift & SwiftUI Quick Reference
 
-This guide explains how the project's UI is structured and how you can customize its components.
+## Glass Effect Patterns
 
-## How Swift Works in This Project
+Apply `.glassEffect()` directly on the view, not in a `.background()`:
 
-This app is built using **SwiftUI**, Apple's modern framework for building user interfaces. Instead of imperative code (e.g., "add a button here"), you use **declarative code** (e.g., "there is a button with this look").
-
-### 1. Views and Components
-Every UI element is a `View`. You can find them in `gemini-shortcut/`.
-- `ContentView.swift`: The main chat interface.
-- `SettingsView.swift`: The settings panel shown in your screenshot.
-- `GlassUI.swift`: This is where all the custom "Liquid Glass" components are defined.
-
-### 2. The "Liquid Glass" Effect
-We use the native `.glassEffect()` modifier (available in the latest macOS). 
-- **Refraction:** It blurs and distorts what's behind it, like real glass.
-- **Chromatic Aberration:** It adds subtle color fringing at the edges.
-- **Tinting:** We can "dye" the glass by adding a `.tint()` to the effect.
-
----
-
-## Changing the Components
-
-### Reducing Background Darkness
-If the UI is too dark, it's usually because the `LiquidGlassContainer` is picking up dark colors from the desktop or the system theme. To fix this, we can add a light tint to the glass.
-
-**Where to find it:** `gemini-shortcut/GlassUI.swift`
-**Look for:** `LiquidGlassContainer`
-
-**How to change it:**
-Change the `glassEffect` to include a white tint:
 ```swift
-.glassEffect(.regular.tint(Color.white.opacity(0.2)), in: ...)
+Text("Hello")
+    .padding()
+    .glassEffect(.regular.tint(Color.white.opacity(0.15)).interactive(), in: .rect(cornerRadius: 22, style: .continuous))
 ```
 
-### How Glass is Applied
-You asked if we put the effect on the component or in the background. In this project, we do both depending on the need:
+For containers, use a `ZStack` with the glass layer behind content:
 
-1.  **On the Component (Directly):** 
-    Used for buttons and small items. The glass *is* the button's shape.
-    ```swift
-    Text("Button")
-        .glassEffect(...) // The text sits on top of its own glass background
-    ```
-2.  **In the Background (ZStack):** 
-    Used for containers or complex toggles. We place a glass layer *behind* everything else.
-    ```swift
-    ZStack {
-        LiquidGlassContainer() // The background glass
-        VStack { ... content ... }
-    }
-    ```
+```swift
+ZStack {
+    Color.clear
+        .glassEffect(.regular.tint(Color.white.opacity(0.15)).interactive(), in: .rect(cornerRadius: 28, style: .continuous))
+    // content
+}
+```
 
-### Modifying Toggles & Buttons
-- **Toggles:** Find `GlassToggle` in `GlassUI.swift`. You can change the `accentColor` or the thumb size.
-- **Buttons:** Find `GlassPillButton` or `GlassButton`. You can change the `padding` for size or the `opacity` for transparency.
+## Colors & Opacity
 
----
+- Primary text: `Color.white.opacity(0.92)`
+- Secondary text: `Color.white.opacity(0.80)`
+- Placeholder: `Color.white.opacity(0.50)`
+- Disabled: `Color.white.opacity(0.30)`
 
-## Pro-Tips for Editing
-- **Colors:** Use `Color.white.opacity(0.5)` for semi-transparent white.
-- **Padding:** Change `.padding(10)` to a larger number to give elements more "breathing room."
-- **Rounding:** Change `cornerRadius: 24` to `cornerRadius: 12` if you want a more "square" look.
+## Common Modifiers
+
+- `.clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))`
+- `.textSelection(.enabled)` for copyable text
+- `.buttonStyle(.plain)` for custom glass buttons

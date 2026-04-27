@@ -18,6 +18,7 @@ struct ChatMessage: Identifiable, Equatable {
     var isStreaming: Bool
     var rating: MessageRating?   // user feedback (persisted)
     var revealedCharCount: Int   // for fade-in streaming text animation
+    var revealedWordCount: Int   // tracks streaming word reveal progress
     let timestamp: Date
 
     init(
@@ -29,6 +30,7 @@ struct ChatMessage: Identifiable, Equatable {
         generatedImages: [Data] = [],
         rating: MessageRating? = nil,
         revealedCharCount: Int = 0,
+        revealedWordCount: Int = 0,
         timestamp: Date = Date()
     ) {
         self.id = id
@@ -39,6 +41,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.isStreaming = isStreaming
         self.rating = rating
         self.revealedCharCount = revealedCharCount
+        self.revealedWordCount = revealedWordCount
         self.timestamp = timestamp
     }
 
@@ -49,7 +52,8 @@ struct ChatMessage: Identifiable, Equatable {
         lhs.images.count == rhs.images.count &&
         lhs.generatedImages.count == rhs.generatedImages.count &&
         lhs.rating == rhs.rating &&
-        lhs.revealedCharCount == rhs.revealedCharCount
+        lhs.revealedCharCount == rhs.revealedCharCount &&
+        lhs.revealedWordCount == rhs.revealedWordCount
     }
 }
 

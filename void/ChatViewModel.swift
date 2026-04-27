@@ -1,16 +1,16 @@
 import SwiftUI
-import Combine
 import Speech
 import AVFoundation
 
 @MainActor
-final class ChatViewModel: ObservableObject {
-    @Published var messages: [ChatMessage] = []
-    @Published var inputText = ""
-    @Published var attachedImages: [NSImage] = []
-    @Published var isLoading = false
-    @Published var isRecording = false
-    @Published var editMessageIndex: Int?
+@Observable
+final class ChatViewModel {
+    var messages: [ChatMessage] = []
+    var inputText = ""
+    var attachedImages: [NSImage] = []
+    var isLoading = false
+    var isRecording = false
+    var editMessageIndex: Int?
 
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -18,6 +18,15 @@ final class ChatViewModel: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var tapInstalled = false
     private var streamingTask: Task<Void, Never>?
+
+    // Buffered display: chunks land in pendingBuffer, a Timer drains them at a
+    // steady cadence into the visible message text — smooths over uneven network
+    // packet arrival so the stream feels even.
+    private var pendingBuffer = ""
+    private var streamingMessageIndex: Int?
+    private var displayTimer: Timer?
+    private var streamFinished = false
+    private let charsPerTick = 4
 
     private let messagesKey = "gemini-chat-messages"
     private let messagesTimestampKey = "gemini-chat-timestamp"
@@ -221,41 +230,99 @@ final class ChatViewModel: ObservableObject {
         inputText = ""
         attachedImages = []
 
-        streamingTask = Task {
+        streamingMessageIndex = messages.count - 1
+        streamFinished = false
+        pendingBuffer = ""
+        startDisplayTimer()
+
+        let provider = ProviderRegistry.current
+        let modelID = SettingsManager.shared.selectedModel
+        let systemInstructions = SettingsManager.shared.customInstructions
+        let snapshot = messages
+
+        streamingTask = Task { @MainActor in
             defer {
                 isLoading = false
+                streamFinished = true
                 saveMessages()
             }
             do {
-                let stream = try await GeminiAPI.shared.streamResponse(messages: messages)
+                let stream = try await provider.streamResponse(
+                    messages: snapshot,
+                    model: modelID,
+                    systemInstructions: systemInstructions
+                )
                 for try await chunk in stream {
                     if chunk.hasPrefix(ChatViewModel.imageSentinel) {
                         let base64 = String(chunk.dropFirst(ChatViewModel.imageSentinel.count))
                         if let imageData = Data(base64Encoded: base64),
-                           let lastIndex = messages.indices.last {
-                            messages[lastIndex].generatedImages.append(imageData)
+                           let idx = streamingMessageIndex,
+                           messages.indices.contains(idx) {
+                            messages[idx].generatedImages.append(imageData)
                         }
-                    } else if let lastIndex = messages.indices.last {
-                        messages[lastIndex].text += chunk
-                        messages[lastIndex].revealedCharCount = min(messages[lastIndex].revealedCharCount + chunk.count, messages[lastIndex].text.count)
+                    } else {
+                        pendingBuffer += chunk
                     }
                 }
             } catch {
-                if let lastIndex = messages.indices.last {
-                    messages[lastIndex].text = "Error: \(error.localizedDescription)"
-                }
-            }
-            if let lastIndex = messages.indices.last {
-                messages[lastIndex].isStreaming = false
-                messages[lastIndex].revealedCharCount = messages[lastIndex].text.count
+                pendingBuffer += "\n\nError: \(error.localizedDescription)"
             }
         }
+    }
+
+    // MARK: - Buffered Display Loop
+
+    private func startDisplayTimer() {
+        displayTimer?.invalidate()
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
+            Task { @MainActor [weak self] in
+                self?.tickDisplay()
+            }
+        }
+    }
+
+    private func tickDisplay() {
+        guard let idx = streamingMessageIndex,
+              messages.indices.contains(idx) else {
+            stopDisplayTimer()
+            return
+        }
+
+        if !pendingBuffer.isEmpty {
+            let take = min(pendingBuffer.count, charsPerTick)
+            let prefix = String(pendingBuffer.prefix(take))
+            pendingBuffer.removeFirst(take)
+            messages[idx].text += prefix
+            messages[idx].revealedCharCount = messages[idx].text.count
+            messages[idx].revealedWordCount = wordCount(in: messages[idx].text)
+            return
+        }
+
+        if streamFinished {
+            messages[idx].isStreaming = false
+            messages[idx].revealedCharCount = messages[idx].text.count
+            messages[idx].revealedWordCount = wordCount(in: messages[idx].text)
+            stopDisplayTimer()
+        }
+    }
+
+    private func wordCount(in text: String) -> Int {
+        text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+    }
+
+    private func stopDisplayTimer() {
+        displayTimer?.invalidate()
+        displayTimer = nil
+        streamingMessageIndex = nil
     }
 
     func cancelStreaming() {
         streamingTask?.cancel()
         streamingTask = nil
         isLoading = false
+        streamFinished = true
+        pendingBuffer = ""
+        stopDisplayTimer()
 
         if let lastIndex = messages.indices.last, messages[lastIndex].role == .model {
             messages.removeLast()
